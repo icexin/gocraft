@@ -2,7 +2,7 @@
 
 A Minecraft like game written in go, just for fun!
 
-![ScreenShot](https://i.imgur.com/vrGRDg1.png | width=600)
+! [ScreenShot](https://i.imgur.com/vrGRDg1.png | width=600)
 
 ## Features
 
