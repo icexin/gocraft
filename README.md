@@ -2,7 +2,7 @@
 
 A Minecraft like game written in go, just for fun!
 
-! [ScreenShot](https://i.imgur.com/vrGRDg1.png | width=600)
+![ScreenShot](https://i.imgur.com/vrGRDg1.png)
 
 ## Features
 
@@ -32,4 +32,4 @@ A Minecraft like game written in go, just for fun!
 
 ## Implementation Details
 
-Most implementations is inspired by https://github.com/fogleman/Craft, thanks for Fogleman's good work!
+Many implementations is inspired by https://github.com/fogleman/Craft, thanks for Fogleman's good work!
