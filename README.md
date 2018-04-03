@@ -12,7 +12,16 @@ A Minecraft like game written in go, just for fun!
 
 ## Dependencies
 
+### For go
+
 - go 1.10+
+
+### For glfw
+
+- On macOS, you need Xcode or Command Line Tools for Xcode (`xcode-select --install`) for required headers and libraries.
+- On Ubuntu/Debian-like Linux distributions, you need `libgl1-mesa-dev` and `xorg-dev` packages.
+- On CentOS/Fedora-like Linux distributions, you need `libX11-devel libXcursor-devel libXrandr-devel libXinerama-devel mesa-libGL-devel libXi-devel` packages.
+
 
 ## Install
 
@@ -29,6 +38,12 @@ A Minecraft like game written in go, just for fun!
 - SPACE to jump.
 - Left and right click to add/remove block.
 - E,R to circle thround the blocks.
+
+## Roadmap
+
+- [ ] Persistent changed blocks
+- [ ] Multiplayer support
+- [ ] Ambient Occlusion support
 
 ## Implementation Details
 
