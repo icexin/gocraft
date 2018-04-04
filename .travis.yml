@@ -1,0 +1,18 @@
+sudo: false
+addons:
+  apt_packages:
+    - libgl1-mesa-dev
+    - xorg-dev
+language: go
+go:
+  - 1.10
+  - tip
+matrix:
+  allow_failures:
+    - go: tip
+  fast_finish: true
+install:
+  -
+script:
+  - go get -v .
+  - diff -u <(echo -n) <(gofmt -d *.go)
