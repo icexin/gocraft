@@ -33,6 +33,18 @@
 			"revisionTime": "2018-01-22T19:07:51Z"
 		},
 		{
+			"checksumSHA1": "TDUKWpUyxiICIhUUgBzwdrQz14I=",
+			"path": "github.com/hashicorp/golang-lru",
+			"revision": "0fb14efe8c47ae851c0034ed7a448854d3d34cf3",
+			"revisionTime": "2018-02-01T23:52:37Z"
+		},
+		{
+			"checksumSHA1": "8Z637dcPkbR5HdLQQBp/9jTbx9Y=",
+			"path": "github.com/hashicorp/golang-lru/simplelru",
+			"revision": "0fb14efe8c47ae851c0034ed7a448854d3d34cf3",
+			"revisionTime": "2018-02-01T23:52:37Z"
+		},
+		{
 			"checksumSHA1": "A7xwIBzePMhAejFTqjOQhTHVz90=",
 			"path": "github.com/ojrac/opensimplex-go",
 			"revision": "c0d2b8b324684d1e69e72eaf01f69ff700e3396a",
