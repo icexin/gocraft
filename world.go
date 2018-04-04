@@ -4,14 +4,32 @@ import (
 	"sync"
 
 	"github.com/go-gl/mathgl/mgl32"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 type World struct {
-	chunks sync.Map
+	mutex  sync.Mutex
+	chunks *lru.Cache // map[Vec3]*Chunk
 }
 
 func NewWorld() *World {
-	return &World{}
+	m := (*renderRadius) * (*renderRadius) * 4
+	chunks, _ := lru.New(m)
+	return &World{
+		chunks: chunks,
+	}
+}
+
+func (w *World) loadChunk(id Vec3) (*Chunk, bool) {
+	chunk, ok := w.chunks.Get(id)
+	if !ok {
+		return nil, false
+	}
+	return chunk.(*Chunk), true
+}
+
+func (w *World) storeChunk(id Vec3, chunk *Chunk) {
+	w.chunks.Add(id, chunk)
 }
 
 func (w *World) Collide(pos mgl32.Vec3) (mgl32.Vec3, bool) {
@@ -78,11 +96,11 @@ func (w *World) Block(id Vec3) int {
 
 func (w *World) BlockChunk(block Vec3) *Chunk {
 	cid := block.Chunkid()
-	chunk, ok := w.chunks.Load(cid)
+	chunk, ok := w.loadChunk(cid)
 	if !ok {
 		return nil
 	}
-	return chunk.(*Chunk)
+	return chunk
 }
 
 func IsPlant(tp int) bool {
@@ -124,16 +142,16 @@ func (w *World) HasBlock(id Vec3) bool {
 }
 
 func (w *World) Chunk(id Vec3) *Chunk {
-	p, ok := w.chunks.Load(id)
+	p, ok := w.loadChunk(id)
 	if ok {
-		return p.(*Chunk)
+		return p
 	}
 	chunk := NewChunk(id)
 	blocks := makeChunkMap(id)
 	for block, tp := range blocks {
 		chunk.Add(block, tp)
 	}
-	w.chunks.Store(id, chunk)
+	w.storeChunk(id, chunk)
 	return chunk
 }
 

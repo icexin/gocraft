@@ -53,7 +53,7 @@ func NearBlock(pos mgl32.Vec3) Vec3 {
 
 type Chunk struct {
 	id     Vec3
-	blocks sync.Map
+	blocks sync.Map // map[Vec3]int
 
 	Version int64
 }
