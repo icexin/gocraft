@@ -37,7 +37,7 @@ A Minecraft like game written in go, just for fun!
 - TAB to toggle flying mode.
 - SPACE to jump.
 - Left and right click to add/remove block.
-- E,R to circle thround the blocks.
+- E,R to cycle through the blocks.
 
 ## Roadmap
 
