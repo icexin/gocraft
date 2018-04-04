@@ -94,7 +94,7 @@ func NewBlockRender(game *Game) (*BlockRender, error) {
 
 func (r *BlockRender) makeChunkMesh(c *Chunk, onmainthread bool) *Mesh {
 	facedata := r.facePool.Get().([]float32)
-	defer r.facePool.Put(facedata)
+	defer r.facePool.Put(facedata[:0])
 
 	c.RangeBlocks(func(id Vec3, w int) {
 		if w == 0 {
@@ -132,7 +132,7 @@ func (r *BlockRender) makeChunkMesh(c *Chunk, onmainthread bool) *Mesh {
 // call on mainthread
 func (r *BlockRender) UpdateItem(w int) {
 	vertices := r.facePool.Get().([]float32)
-	defer r.facePool.Put(vertices)
+	defer r.facePool.Put(vertices[:0])
 	texture := tex.Texture(w)
 	show := [...]bool{true, true, true, true, true, true}
 	pos := Vec3{0, 0, 0}
