@@ -5,8 +5,8 @@ addons:
     - xorg-dev
 language: go
 go:
-  - 1.10
-  - tip
+  - "1.10"
+  - "tip"
 matrix:
   allow_failures:
     - go: tip
@@ -14,5 +14,5 @@ matrix:
 install:
   -
 script:
-  - go get -v .
+  - go install
   - diff -u <(echo -n) <(gofmt -d *.go)
