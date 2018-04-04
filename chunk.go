@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/gob"
+	"io"
 	"log"
 	"math"
+	"strconv"
 	"sync"
 	"time"
 
@@ -43,6 +46,10 @@ func (v Vec3) Chunkid() Vec3 {
 	}
 }
 
+func (v Vec3) ChunkidString() string {
+	return strconv.Itoa(v.X) + "_" + strconv.Itoa(v.Z)
+}
+
 func NearBlock(pos mgl32.Vec3) Vec3 {
 	return Vec3{
 		int(round(pos.X())),
@@ -54,7 +61,7 @@ func NearBlock(pos mgl32.Vec3) Vec3 {
 type Chunk struct {
 	id     Vec3
 	world  *World
-	blocks sync.Map
+	Blocks sync.Map
 
 	Version int64
 }
@@ -66,6 +73,32 @@ func NewChunk(w *World, id Vec3) *Chunk {
 		Version: time.Now().Unix(),
 	}
 	return c
+}
+
+func (c *Chunk) SaveToWriter(writer io.Writer) {
+	enc := gob.NewEncoder(writer)
+	enc.Encode(c.id)
+	enc.Encode(c.Version)
+	simpleBlockMap := make(map[Vec3]int)
+	c.Blocks.Range(func(key, block interface{}) bool {
+		simpleBlockMap[key.(Vec3)] = block.(int)
+		return true
+	})
+
+	enc.Encode(simpleBlockMap)
+}
+
+func (c *Chunk) LoadFromReader(reader io.Reader) {
+	dec := gob.NewDecoder(reader)
+	dec.Decode(&c.id)
+	dec.Decode(&c.Version)
+	var simpleBlockMap map[Vec3]int
+	dec.Decode(&simpleBlockMap)
+	c.Blocks = sync.Map{}
+	for k, v := range simpleBlockMap {
+		c.Blocks.Store(k, v)
+	}
+
 }
 
 func (c *Chunk) UpdateVersion() {
@@ -80,7 +113,7 @@ func (c *Chunk) Block(id Vec3) int {
 	if id.Chunkid() != c.id {
 		log.Panicf("id %v chunk %v", id, c.id)
 	}
-	w, ok := c.blocks.Load(id)
+	w, ok := c.Blocks.Load(id)
 	if ok {
 		return w.(int)
 	}
@@ -91,7 +124,7 @@ func (c *Chunk) Add(id Vec3, w int) {
 	if id.Chunkid() != c.id {
 		log.Panicf("id %v chunk %v", id, c.id)
 	}
-	c.blocks.Store(id, w)
+	c.Blocks.Store(id, w)
 	c.UpdateVersion()
 }
 
@@ -99,12 +132,12 @@ func (c *Chunk) Del(id Vec3) {
 	if id.Chunkid() != c.id {
 		log.Panicf("id %v chunk %v", id, c.id)
 	}
-	c.blocks.Delete(id)
+	c.Blocks.Delete(id)
 	c.UpdateVersion()
 }
 
 func (c *Chunk) RangeBlocks(f func(id Vec3, w int)) {
-	c.blocks.Range(func(key, value interface{}) bool {
+	c.Blocks.Range(func(key, value interface{}) bool {
 		f(key.(Vec3), value.(int))
 		return true
 	})

@@ -12,7 +12,7 @@ const (
 )
 
 type Camera struct {
-	pos    mgl32.Vec3
+	CamPos mgl32.Vec3
 	up     mgl32.Vec3
 	right  mgl32.Vec3
 	front  mgl32.Vec3
@@ -27,7 +27,7 @@ type Camera struct {
 
 func NewCamera(pos mgl32.Vec3) *Camera {
 	c := &Camera{
-		pos:     pos,
+		CamPos:  pos,
 		front:   mgl32.Vec3{0, 0, -1},
 		rotatey: 0,
 		rotatex: -90,
@@ -39,15 +39,15 @@ func NewCamera(pos mgl32.Vec3) *Camera {
 }
 
 func (c *Camera) Matrix() mgl32.Mat4 {
-	return mgl32.LookAtV(c.pos, c.pos.Add(c.front), c.up)
+	return mgl32.LookAtV(c.CamPos, c.CamPos.Add(c.front), c.up)
 }
 
 func (c *Camera) SetPos(pos mgl32.Vec3) {
-	c.pos = pos
+	c.CamPos = pos
 }
 
 func (c *Camera) Pos() mgl32.Vec3 {
-	return c.pos
+	return c.CamPos
 }
 
 func (c *Camera) Front() mgl32.Vec3 {
@@ -84,20 +84,20 @@ func (c *Camera) OnMoveChange(dir CameraMovement, delta float32) {
 	switch dir {
 	case MoveForward:
 		if c.flying {
-			c.pos = c.pos.Add(c.front.Mul(delta))
+			c.CamPos = c.CamPos.Add(c.front.Mul(delta))
 		} else {
-			c.pos = c.pos.Add(c.wfront.Mul(delta))
+			c.CamPos = c.CamPos.Add(c.wfront.Mul(delta))
 		}
 	case MoveBackward:
 		if c.flying {
-			c.pos = c.pos.Sub(c.front.Mul(delta))
+			c.CamPos = c.CamPos.Sub(c.front.Mul(delta))
 		} else {
-			c.pos = c.pos.Sub(c.wfront.Mul(delta))
+			c.CamPos = c.CamPos.Sub(c.wfront.Mul(delta))
 		}
 	case MoveLeft:
-		c.pos = c.pos.Sub(c.right.Mul(delta))
+		c.CamPos = c.CamPos.Sub(c.right.Mul(delta))
 	case MoveRight:
-		c.pos = c.pos.Add(c.right.Mul(delta))
+		c.CamPos = c.CamPos.Add(c.right.Mul(delta))
 	}
 }
 func (c *Camera) updateAngles() {

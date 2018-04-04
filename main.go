@@ -1,9 +1,16 @@
 package main
 
 import (
+	"encoding/gob"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
+	"path"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	_ "image/png"
@@ -21,10 +28,12 @@ var (
 	pprofPort = flag.String("pprof", "", "http pprof port")
 )
 
+const savePath = "./game_save"
+
 type Game struct {
 	win *glfw.Window
 
-	camera   *Camera
+	Camera   *Camera
 	lx, ly   float64
 	vy       float32
 	prevtime float64
@@ -84,7 +93,7 @@ func NewGame(w, h int) (*Game, error) {
 		game.win = win
 	})
 	game.world = NewWorld()
-	game.camera = NewCamera(mgl32.Vec3{0, 16, 0})
+	game.Camera = NewCamera(mgl32.Vec3{0, 16, 0})
 	game.blockRender, err = NewBlockRender(game)
 	if err != nil {
 		return nil, err
@@ -125,9 +134,9 @@ func (g *Game) onMouseButtonCallback(win *glfw.Window, button glfw.MouseButton, 
 		g.setExclusiveMouse(true)
 		return
 	}
-	head := NearBlock(g.camera.Pos())
+	head := NearBlock(g.Camera.Pos())
 	foot := head.Down()
-	block, prev := g.world.HitTest(g.camera.Pos(), g.camera.Front())
+	block, prev := g.world.HitTest(g.Camera.Pos(), g.Camera.Front())
 	if button == glfw.MouseButton2 && action == glfw.Press {
 		if prev != nil && *prev != head && *prev != foot {
 			chunk := g.world.BlockChunk(*prev)
@@ -158,16 +167,17 @@ func (g *Game) onCursorPosCallback(win *glfw.Window, xpos float64, ypos float64)
 	}
 	dx, dy := xpos-g.lx, g.ly-ypos
 	g.lx, g.ly = xpos, ypos
-	g.camera.OnAngleChange(float32(dx), float32(dy))
+	g.Camera.OnAngleChange(float32(dx), float32(dy))
 }
 
 func (g *Game) onKeyCallback(win *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+
 	if action != glfw.Press {
 		return
 	}
 	switch key {
 	case glfw.KeyTab:
-		g.camera.FlipFlying()
+		g.Camera.FlipFlying()
 	case glfw.KeySpace:
 		block := g.CurrentBlockid()
 		if g.world.HasBlock(Vec3{block.X, block.Y - 2, block.Z}) {
@@ -184,32 +194,108 @@ func (g *Game) onKeyCallback(win *glfw.Window, key glfw.Key, scancode int, actio
 		}
 		g.item = availableItems[g.itemidx]
 		g.blockRender.UpdateItem(g.item)
+	case glfw.KeyK:
+		g.saveGame()
+	case glfw.KeyL:
+		g.loadGame()
 	}
 }
+func (g *Game) saveGame() {
+	fmt.Println("Saving game...")
 
+	folderError := os.MkdirAll(savePath, 0777)
+	if folderError != nil {
+		fmt.Printf("Error while creating save directory: %v\n", folderError)
+		return
+	}
+	file, err := os.Create(path.Join(savePath, "./game.dat"))
+	if err != nil {
+		fmt.Printf("Error while opening save file: %v\n", err)
+		return
+	}
+	defer file.Close()
+	encoder := gob.NewEncoder(file)
+	encodeErr := encoder.Encode(g)
+	if encodeErr != nil {
+		fmt.Printf("Error while saving data: %v\n", encodeErr)
+		return
+	}
+	g.world.chunks.Range(func(key, value interface{}) bool {
+		chunkFile, fileErr := os.Create(path.Join(savePath, key.(Vec3).ChunkidString()+".chunk.dat"))
+		if fileErr != nil {
+			fmt.Printf("Error while saving chunk data: %v\n", encodeErr)
+			return false
+		}
+		defer chunkFile.Close()
+		value.(*Chunk).SaveToWriter(chunkFile)
+		return true
+	})
+	fmt.Println("Game saved!")
+}
+func (g *Game) loadGame() {
+	fmt.Println("Loading game...")
+	file, err := os.Open(path.Join(savePath, "./game.dat"))
+	if err != nil {
+		fmt.Printf("Error while opening save file: %v\n", err)
+		return
+	}
+	decoder := gob.NewDecoder(file)
+	decodeErr := decoder.Decode(&g)
+	if decodeErr != nil {
+		fmt.Printf("Error while decoding data: %v\n", decodeErr)
+		return
+	}
+	g.world.chunks = sync.Map{}
+	files, dirErr := ioutil.ReadDir(savePath)
+	if dirErr != nil {
+		fmt.Printf("Error while opening save file: %v\n", err)
+		return
+	}
+	for _, fi := range files {
+		if !fi.IsDir() && strings.HasSuffix(fi.Name(), ".chunk.dat") {
+			chunkFile, err := os.Open(path.Join(savePath, fi.Name()))
+			if err != nil {
+				fmt.Printf("Error while opening save file: %v\n", err)
+				return
+			}
+			parsedName := strings.Split(strings.Split(fi.Name(), ".")[0], "_")
+			x, convErr := strconv.Atoi(parsedName[0])
+			z, convErr := strconv.Atoi(parsedName[1])
+			fmt.Printf("name=%v x=%v z=%v\n", fi.Name(), x, z)
+			if convErr != nil {
+				fmt.Printf("Error while parsing chunk id: %v\n", convErr)
+				return
+			}
+			loadedChunk := NewChunk(g.world, Vec3{x, 0, z})
+			loadedChunk.LoadFromReader(chunkFile)
+			g.world.chunks.Store(Vec3{x, 0, z}, loadedChunk)
+		}
+	}
+	fmt.Println("Game loaded!")
+}
 func (g *Game) handleKeyInput(dt float64) {
 	speed := float32(0.1)
-	if g.camera.flying {
+	if g.Camera.flying {
 		speed = 0.2
 	}
 	if g.win.GetKey(glfw.KeyEscape) == glfw.Press {
 		g.setExclusiveMouse(false)
 	}
 	if g.win.GetKey(glfw.KeyW) == glfw.Press {
-		g.camera.OnMoveChange(MoveForward, speed)
+		g.Camera.OnMoveChange(MoveForward, speed)
 	}
 	if g.win.GetKey(glfw.KeyS) == glfw.Press {
-		g.camera.OnMoveChange(MoveBackward, speed)
+		g.Camera.OnMoveChange(MoveBackward, speed)
 	}
 	if g.win.GetKey(glfw.KeyA) == glfw.Press {
-		g.camera.OnMoveChange(MoveLeft, speed)
+		g.Camera.OnMoveChange(MoveLeft, speed)
 	}
 	if g.win.GetKey(glfw.KeyD) == glfw.Press {
-		g.camera.OnMoveChange(MoveRight, speed)
+		g.Camera.OnMoveChange(MoveRight, speed)
 	}
-	pos := g.camera.Pos()
+	pos := g.Camera.Pos()
 	stop := false
-	if !g.camera.Flying() {
+	if !g.Camera.Flying() {
 		g.vy -= float32(dt * 20)
 		if g.vy < -50 {
 			g.vy = -50
@@ -221,11 +307,11 @@ func (g *Game) handleKeyInput(dt float64) {
 	if stop {
 		g.vy = 0
 	}
-	g.camera.SetPos(pos)
+	g.Camera.SetPos(pos)
 }
 
 func (g *Game) CurrentBlockid() Vec3 {
-	pos := g.camera.Pos()
+	pos := g.Camera.Pos()
 	return NearBlock(pos)
 }
 
@@ -235,7 +321,7 @@ func (g *Game) ShouldClose() bool {
 
 func (g *Game) renderStat() {
 	g.fps.Update()
-	p := g.camera.Pos()
+	p := g.Camera.Pos()
 	cid := NearBlock(p).Chunkid()
 	stat := g.blockRender.Stat()
 	title := fmt.Sprintf("[%.2f %.2f %.2f] %v [%d/%d %d] %d", p.X(), p.Y(), p.Z(),
@@ -310,6 +396,10 @@ func run() {
 }
 
 func main() {
+	gob.Register(Game{})
+	gob.Register(Camera{})
+	gob.Register(Chunk{})
+	gob.Register(World{})
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	flag.Parse()
 	go func() {

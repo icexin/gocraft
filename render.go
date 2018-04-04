@@ -198,14 +198,14 @@ func (r *BlockRender) get3dmat() mgl32.Mat4 {
 	n := float32(*renderRadius * ChunkWidth)
 	width, height := r.game.win.GetSize()
 	mat := mgl32.Perspective(radian(45), float32(width)/float32(height), 0.01, n)
-	mat = mat.Mul4(r.game.camera.Matrix())
+	mat = mat.Mul4(r.game.Camera.Matrix())
 	return mat
 }
 
 func (r *BlockRender) get2dmat() mgl32.Mat4 {
 	n := float32(*renderRadius * ChunkWidth)
 	mat := mgl32.Ortho(-n, n, -n, n, -1, n)
-	mat = mat.Mul4(r.game.camera.Matrix())
+	mat = mat.Mul4(r.game.Camera.Matrix())
 	return mat
 }
 
@@ -217,7 +217,7 @@ func (r *BlockRender) sortNeededChunks(m map[Vec3]bool) []Vec3 {
 		i++
 	}
 
-	cid := NearBlock(r.game.camera.Pos()).Chunkid()
+	cid := NearBlock(r.game.Camera.Pos()).Chunkid()
 	x, z := cid.X, cid.Z
 	mat := r.get3dmat()
 	planes := frustumPlanes(&mat)
@@ -239,7 +239,7 @@ func (r *BlockRender) sortNeededChunks(m map[Vec3]bool) []Vec3 {
 }
 
 func (r *BlockRender) updateMeshCache() {
-	block := NearBlock(r.game.camera.Pos())
+	block := NearBlock(r.game.Camera.Pos())
 	chunk := block.Chunkid()
 	x, z := chunk.X, chunk.Z
 	n := *renderRadius
@@ -325,7 +325,7 @@ func (r *BlockRender) forceChunks(ids []Vec3) {
 }
 
 func (r *BlockRender) forcePlayerChunks() {
-	bid := NearBlock(r.game.camera.Pos())
+	bid := NearBlock(r.game.Camera.Pos())
 	cid := bid.Chunkid()
 	var ids []Vec3
 	for dx := -1; dx <= 1; dx++ {
@@ -352,7 +352,7 @@ func (r *BlockRender) drawChunks() {
 	mat := r.get3dmat()
 
 	r.shader.SetUniformAttr(0, mat)
-	r.shader.SetUniformAttr(1, r.game.camera.Pos())
+	r.shader.SetUniformAttr(1, r.game.Camera.Pos())
 	r.shader.SetUniformAttr(2, float32(*renderRadius)*ChunkWidth)
 
 	planes := frustumPlanes(&mat)
@@ -583,7 +583,7 @@ func (r *LineRender) drawCross() {
 func (r *LineRender) drawWireFrame(mat mgl32.Mat4) {
 	var vertices []float32
 	w := r.game
-	block, _ := w.world.HitTest(w.camera.Pos(), w.camera.Front())
+	block, _ := w.world.HitTest(w.Camera.Pos(), w.Camera.Front())
 	if block == nil {
 		return
 	}
@@ -620,7 +620,7 @@ func (r *LineRender) drawWireFrame(mat mgl32.Mat4) {
 func (r *LineRender) Draw() {
 	width, height := r.game.win.GetSize()
 	projection := mgl32.Perspective(radian(45), float32(width)/float32(height), 0.01, ChunkWidth*float32(*renderRadius))
-	camera := r.game.camera.Matrix()
+	camera := r.game.Camera.Matrix()
 	mat := projection.Mul4(camera)
 
 	r.shader.Begin()
