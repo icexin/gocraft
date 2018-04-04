@@ -128,7 +128,7 @@ func (w *World) Chunk(id Vec3) *Chunk {
 	if ok {
 		return p.(*Chunk)
 	}
-	chunk := NewChunk(w, id)
+	chunk := NewChunk(id)
 	blocks := makeChunkMap(id)
 	for block, tp := range blocks {
 		chunk.Add(block, tp)

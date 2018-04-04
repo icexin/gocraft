@@ -53,16 +53,14 @@ func NearBlock(pos mgl32.Vec3) Vec3 {
 
 type Chunk struct {
 	id     Vec3
-	world  *World
 	blocks sync.Map
 
 	Version int64
 }
 
-func NewChunk(w *World, id Vec3) *Chunk {
+func NewChunk(id Vec3) *Chunk {
 	c := &Chunk{
 		id:      id,
-		world:   w,
 		Version: time.Now().Unix(),
 	}
 	return c
