@@ -132,6 +132,7 @@ func (g *Game) onMouseButtonCallback(win *glfw.Window, button glfw.MouseButton, 
 		if prev != nil && *prev != head && *prev != foot {
 			chunk := g.world.BlockChunk(*prev)
 			chunk.Add(*prev, g.item)
+			store.UpdateBlock(*prev, g.item)
 			g.dirtyBlock(*prev)
 		}
 	}
@@ -139,6 +140,7 @@ func (g *Game) onMouseButtonCallback(win *glfw.Window, button glfw.MouseButton, 
 		if block != nil {
 			chunk := g.world.BlockChunk(*block)
 			chunk.Del(*block)
+			store.UpdateBlock(*block, 0)
 			g.dirtyBlock(*block)
 		}
 	}
@@ -298,15 +300,23 @@ func run() {
 		log.Fatal(err)
 	}
 
+	err = InitStore()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer store.Close()
+
 	game, err := NewGame(800, 600)
 	if err != nil {
 		log.Fatal(err)
 	}
+	game.camera.Restore(store.GetCamera())
 	tick := time.Tick(time.Second / 60)
 	for !game.ShouldClose() {
 		<-tick
 		game.Update()
 	}
+	store.UpdateCamera(game.camera.State())
 }
 
 func main() {

@@ -38,6 +38,17 @@ func NewCamera(pos mgl32.Vec3) *Camera {
 	return c
 }
 
+func (c *Camera) Restore(pos mgl32.Vec3, rx, ry float32) {
+	c.pos = pos
+	c.rotatex = rx
+	c.rotatey = ry
+	c.updateAngles()
+}
+
+func (c *Camera) State() (mgl32.Vec3, float32, float32) {
+	return c.pos, c.rotatex, c.rotatey
+}
+
 func (c *Camera) Matrix() mgl32.Mat4 {
 	return mgl32.LookAtV(c.pos, c.pos.Add(c.front), c.up)
 }

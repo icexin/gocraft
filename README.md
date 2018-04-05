@@ -41,7 +41,7 @@ A Minecraft like game written in go, just for fun!
 
 ## Roadmap
 
-- [ ] Persistent changed blocks
+- [x] Persistent changed blocks
 - [ ] Multiplayer support
 - [ ] Ambient Occlusion support
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"sync"
 
 	"github.com/go-gl/mathgl/mgl32"
@@ -150,6 +151,17 @@ func (w *World) Chunk(id Vec3) *Chunk {
 	blocks := makeChunkMap(id)
 	for block, tp := range blocks {
 		chunk.Add(block, tp)
+	}
+	err := store.RangeBlocks(id, func(bid Vec3, w int) {
+		if w == 0 {
+			chunk.Del(bid)
+			return
+		}
+		chunk.Add(bid, w)
+	})
+	if err != nil {
+		log.Printf("fetch chunk(%v) from db error:%s", id, err)
+		return nil
 	}
 	w.storeChunk(id, chunk)
 	return chunk
