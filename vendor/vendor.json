@@ -3,6 +3,12 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "20Pind5XCrfZL/F0oibWfd9gotA=",
+			"path": "github.com/boltdb/bolt",
+			"revision": "fd01fc79c553a8e99d512a07e8e0c63d4a3ccfc5",
+			"revisionTime": "2018-03-02T18:00:52Z"
+		},
+		{
 			"checksumSHA1": "kBh/nL4BTWFToDNDP9VTsJ5TcPw=",
 			"path": "github.com/faiface/glhf",
 			"revision": "98c0391c0fd3f0b365cfe5d467ac162b79dfb002",
@@ -61,6 +67,12 @@
 			"path": "golang.org/x/image/math/f32",
 			"revision": "12117c17ca67ffa1ce22e9409f3b0b0a93ac08c7",
 			"revisionTime": "2017-12-12T19:22:48Z"
+		},
+		{
+			"checksumSHA1": "fDv4eIQwZuKatRI+hU7ILAJSl5c=",
+			"path": "golang.org/x/sys/unix",
+			"revision": "e42485b6e20ae7d2304ec72e535b103ed350cc02",
+			"revisionTime": "2017-08-09T17:40:02Z"
 		}
 	],
 	"rootPath": "github.com/icexin/gocraft"
