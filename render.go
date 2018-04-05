@@ -271,9 +271,17 @@ func (r *BlockRender) updateMeshCache() {
 		if len(added) > batchBuildChunk {
 			break
 		}
+		mesh, ok := r.meshcache.Load(id)
 		// 不在cache里面的需要重新构建
-		if _, ok := r.meshcache.Load(id); !ok {
+		if !ok {
 			added = append(added, id)
+		} else {
+			chunk := r.game.world.Chunk(id)
+			if chunk.Version != mesh.(*Mesh).Version {
+				log.Printf("update cache %v", id)
+				added = append(added, id)
+				removed = append(removed, id)
+			}
 		}
 	}
 
