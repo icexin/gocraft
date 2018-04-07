@@ -31,6 +31,12 @@ A Minecraft like game written in go, just for fun!
 
 `cd $GOPATH/src/github.com/icexin/gocraft && gocraft`
 
+or 
+
+`cd $GOPATH/src/github.com/icexin/gocraft && go build`
+
+`./gocraft`
+
 ## How to play
 
 - W, S, A, D to move around.
