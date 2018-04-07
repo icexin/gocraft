@@ -38,15 +38,21 @@ func NewCamera(pos mgl32.Vec3) *Camera {
 	return c
 }
 
-func (c *Camera) Restore(pos mgl32.Vec3, rx, ry float32) {
-	c.pos = pos
-	c.rotatex = rx
-	c.rotatey = ry
+func (c *Camera) Restore(state PlayerState) {
+	c.pos = mgl32.Vec3{state.X, state.Y, state.Z}
+	c.rotatex = state.Rx
+	c.rotatey = state.Ry
 	c.updateAngles()
 }
 
-func (c *Camera) State() (mgl32.Vec3, float32, float32) {
-	return c.pos, c.rotatex, c.rotatey
+func (c *Camera) State() PlayerState {
+	return PlayerState{
+		X:  c.pos.X(),
+		Y:  c.pos.Y(),
+		Z:  c.pos.Z(),
+		Rx: c.rotatex,
+		Ry: c.rotatey,
+	}
 }
 
 func (c *Camera) Matrix() mgl32.Mat4 {

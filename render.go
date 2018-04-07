@@ -8,7 +8,6 @@ import (
 	"os"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/faiface/glhf"
 	"github.com/faiface/mainthread"
@@ -39,10 +38,10 @@ func loadImage(fname string) ([]uint8, image.Rectangle, error) {
 type BlockRender struct {
 	shader  *glhf.Shader
 	texture *glhf.Texture
-	game    *Game
 
 	facePool *sync.Pool
 
+	sigch     chan struct{}
 	meshcache sync.Map //map[Vec3]*Mesh
 
 	stat Stat
@@ -50,7 +49,7 @@ type BlockRender struct {
 	item *Mesh
 }
 
-func NewBlockRender(game *Game) (*BlockRender, error) {
+func NewBlockRender() (*BlockRender, error) {
 	var (
 		err error
 	)
@@ -60,7 +59,7 @@ func NewBlockRender(game *Game) (*BlockRender, error) {
 	}
 
 	r := &BlockRender{
-		game: game,
+		sigch: make(chan struct{}, 4),
 	}
 
 	mainthread.Call(func() {
@@ -101,14 +100,14 @@ func (r *BlockRender) makeChunkMesh(c *Chunk, onmainthread bool) *Mesh {
 			log.Panicf("unexpect 0 item type on %v", id)
 		}
 		show := [...]bool{
-			IsTransparent(r.game.world.Block(id.Left())),
-			IsTransparent(r.game.world.Block(id.Right())),
-			IsTransparent(r.game.world.Block(id.Up())),
-			IsTransparent(r.game.world.Block(id.Down())),
-			IsTransparent(r.game.world.Block(id.Front())),
-			IsTransparent(r.game.world.Block(id.Back())),
+			IsTransparent(game.world.Block(id.Left())),
+			IsTransparent(game.world.Block(id.Right())),
+			IsTransparent(game.world.Block(id.Up())),
+			IsTransparent(game.world.Block(id.Down())) && id.Y != 0,
+			IsTransparent(game.world.Block(id.Front())),
+			IsTransparent(game.world.Block(id.Back())),
 		}
-		if IsPlant(r.game.world.Block(id)) {
+		if IsPlant(game.world.Block(id)) {
 			facedata = makePlantData(facedata, show, id, tex.Texture(w))
 		} else {
 			facedata = makeCubeData(facedata, show, id, tex.Texture(w))
@@ -124,7 +123,6 @@ func (r *BlockRender) makeChunkMesh(c *Chunk, onmainthread bool) *Mesh {
 			mesh = NewMesh(r.shader, facedata)
 		})
 	}
-	mesh.Version = c.Version
 	mesh.Id = c.Id()
 	return mesh
 }
@@ -196,16 +194,16 @@ func isChunkVisiable(planes []mgl32.Vec4, id Vec3) bool {
 
 func (r *BlockRender) get3dmat() mgl32.Mat4 {
 	n := float32(*renderRadius * ChunkWidth)
-	width, height := r.game.win.GetSize()
+	width, height := game.win.GetSize()
 	mat := mgl32.Perspective(radian(45), float32(width)/float32(height), 0.01, n)
-	mat = mat.Mul4(r.game.camera.Matrix())
+	mat = mat.Mul4(game.camera.Matrix())
 	return mat
 }
 
 func (r *BlockRender) get2dmat() mgl32.Mat4 {
 	n := float32(*renderRadius * ChunkWidth)
 	mat := mgl32.Ortho(-n, n, -n, n, -1, n)
-	mat = mat.Mul4(r.game.camera.Matrix())
+	mat = mat.Mul4(game.camera.Matrix())
 	return mat
 }
 
@@ -217,7 +215,7 @@ func (r *BlockRender) sortNeededChunks(m map[Vec3]bool) []Vec3 {
 		i++
 	}
 
-	cid := NearBlock(r.game.camera.Pos()).Chunkid()
+	cid := NearBlock(game.camera.Pos()).Chunkid()
 	x, z := cid.X, cid.Z
 	mat := r.get3dmat()
 	planes := frustumPlanes(&mat)
@@ -239,7 +237,7 @@ func (r *BlockRender) sortNeededChunks(m map[Vec3]bool) []Vec3 {
 }
 
 func (r *BlockRender) updateMeshCache() {
-	block := NearBlock(r.game.camera.Pos())
+	block := NearBlock(game.camera.Pos())
 	chunk := block.Chunkid()
 	x, z := chunk.X, chunk.Z
 	n := *renderRadius
@@ -276,8 +274,7 @@ func (r *BlockRender) updateMeshCache() {
 		if !ok {
 			added = append(added, id)
 		} else {
-			chunk := r.game.world.Chunk(id)
-			if chunk.Version != mesh.(*Mesh).Version {
+			if mesh.(*Mesh).Dirty {
 				log.Printf("update cache %v", id)
 				added = append(added, id)
 				removed = append(removed, id)
@@ -293,7 +290,7 @@ func (r *BlockRender) updateMeshCache() {
 		removedMesh = append(removedMesh, mesh.(*Mesh))
 	}
 
-	newChunks := r.game.world.Chunks(added)
+	newChunks := game.world.Chunks(added)
 	for _, c := range newChunks {
 		log.Printf("add cache %v", c.Id())
 		r.meshcache.Store(c.Id(), r.makeChunkMesh(c, false))
@@ -311,13 +308,13 @@ func (r *BlockRender) updateMeshCache() {
 func (r *BlockRender) forceChunks(ids []Vec3) {
 	var removedMesh []*Mesh
 	for _, id := range ids {
-		chunk := r.game.world.Chunk(id)
+		chunk := game.world.Chunk(id)
 		imesh, ok := r.meshcache.Load(id)
 		var mesh *Mesh
 		if ok {
 			mesh = imesh.(*Mesh)
 		}
-		if ok && chunk.Version == mesh.Version {
+		if ok && !mesh.Dirty {
 			continue
 		}
 		r.meshcache.Store(id, r.makeChunkMesh(chunk, true))
@@ -333,7 +330,7 @@ func (r *BlockRender) forceChunks(ids []Vec3) {
 }
 
 func (r *BlockRender) forcePlayerChunks() {
-	bid := NearBlock(r.game.camera.Pos())
+	bid := NearBlock(game.camera.Pos())
 	cid := bid.Chunkid()
 	var ids []Vec3
 	for dx := -1; dx <= 1; dx++ {
@@ -345,11 +342,26 @@ func (r *BlockRender) forcePlayerChunks() {
 	r.forceChunks(ids)
 }
 
+func (r *BlockRender) checkChunks() {
+	// nonblock signal
+	select {
+	case r.sigch <- struct{}{}:
+	default:
+	}
+}
+
+func (r *BlockRender) DirtyChunk(id Vec3) {
+	mesh, ok := r.meshcache.Load(id)
+	if !ok {
+		return
+	}
+	mesh.(*Mesh).Dirty = true
+}
+
 func (r *BlockRender) UpdateLoop() {
-	tick := time.NewTicker(time.Second / 60)
 	for {
 		select {
-		case <-tick.C:
+		case <-r.sigch:
 		}
 		r.updateMeshCache()
 	}
@@ -357,10 +369,11 @@ func (r *BlockRender) UpdateLoop() {
 
 func (r *BlockRender) drawChunks() {
 	r.forcePlayerChunks()
+	r.checkChunks()
 	mat := r.get3dmat()
 
 	r.shader.SetUniformAttr(0, mat)
-	r.shader.SetUniformAttr(1, r.game.camera.Pos())
+	r.shader.SetUniformAttr(1, game.camera.Pos())
 	r.shader.SetUniformAttr(2, float32(*renderRadius)*ChunkWidth)
 
 	planes := frustumPlanes(&mat)
@@ -381,7 +394,7 @@ func (r *BlockRender) drawItem() {
 	if r.item == nil {
 		return
 	}
-	width, height := r.game.win.GetSize()
+	width, height := game.win.GetSize()
 	ratio := float32(width) / float32(height)
 	projection := mgl32.Ortho2D(0, 15, 0, 15/ratio)
 	model := mgl32.Translate3D(1, 1, 0)
@@ -419,7 +432,7 @@ type Mesh struct {
 	vao, vbo uint32
 	faces    int
 	Id       Vec3
-	Version  int64
+	Dirty    bool
 }
 
 func NewMesh(shader *glhf.Shader, data []float32) *Mesh {
@@ -550,17 +563,14 @@ func (l *Lines) Release() {
 }
 
 type LineRender struct {
-	game      *Game
 	shader    *glhf.Shader
 	cross     *Lines
 	wireFrame *Lines
 	lastBlock Vec3
 }
 
-func NewLineRender(game *Game) (*LineRender, error) {
-	r := &LineRender{
-		game: game,
-	}
+func NewLineRender() (*LineRender, error) {
+	r := &LineRender{}
 	var err error
 	mainthread.Call(func() {
 		r.shader, err = glhf.NewShader(glhf.AttrFormat{
@@ -581,7 +591,7 @@ func NewLineRender(game *Game) (*LineRender, error) {
 }
 
 func (r *LineRender) drawCross() {
-	width, height := r.game.win.GetFramebufferSize()
+	width, height := game.win.GetFramebufferSize()
 	project := mgl32.Ortho2D(0, float32(width), float32(height), 0)
 	model := mgl32.Translate3D(float32(width/2), float32(height/2), 0)
 	model = model.Mul4(mgl32.Scale3D(float32(height/30), float32(height/30), 0))
@@ -590,8 +600,7 @@ func (r *LineRender) drawCross() {
 
 func (r *LineRender) drawWireFrame(mat mgl32.Mat4) {
 	var vertices []float32
-	w := r.game
-	block, _ := w.world.HitTest(w.camera.Pos(), w.camera.Front())
+	block, _ := game.world.HitTest(game.camera.Pos(), game.camera.Front())
 	if block == nil {
 		return
 	}
@@ -605,12 +614,12 @@ func (r *LineRender) drawWireFrame(mat mgl32.Mat4) {
 
 	id := *block
 	show := [...]bool{
-		IsTransparent(r.game.world.Block(id.Left())),
-		IsTransparent(r.game.world.Block(id.Right())),
-		IsTransparent(r.game.world.Block(id.Up())),
-		IsTransparent(r.game.world.Block(id.Down())),
-		IsTransparent(r.game.world.Block(id.Front())),
-		IsTransparent(r.game.world.Block(id.Back())),
+		IsTransparent(game.world.Block(id.Left())),
+		IsTransparent(game.world.Block(id.Right())),
+		IsTransparent(game.world.Block(id.Up())),
+		IsTransparent(game.world.Block(id.Down())),
+		IsTransparent(game.world.Block(id.Front())),
+		IsTransparent(game.world.Block(id.Back())),
 	}
 	vertices = makeWireFrameData(vertices, show)
 	if len(vertices) == 0 {
@@ -626,9 +635,9 @@ func (r *LineRender) drawWireFrame(mat mgl32.Mat4) {
 }
 
 func (r *LineRender) Draw() {
-	width, height := r.game.win.GetSize()
+	width, height := game.win.GetSize()
 	projection := mgl32.Perspective(radian(45), float32(width)/float32(height), 0.01, ChunkWidth*float32(*renderRadius))
-	camera := r.game.camera.Matrix()
+	camera := game.camera.Matrix()
 	mat := projection.Mul4(camera)
 
 	r.shader.Begin()

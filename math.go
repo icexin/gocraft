@@ -31,6 +31,24 @@ func radian(angle float32) float32 {
 	return mgl32.DegToRad(angle)
 }
 
+func max(a, b float32) float32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func min(a, b float32) float32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func mix(a, b, factor float32) float32 {
+	return a*(1-factor) + factor*b
+}
+
 func noise2(x, y float32, octaves int, persistence, lacunarity float32) float32 {
 	var (
 		freq  float32 = 1

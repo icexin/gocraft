@@ -104,6 +104,18 @@ func (w *World) BlockChunk(block Vec3) *Chunk {
 	return chunk
 }
 
+func (w *World) UpdateBlock(id Vec3, tp int) {
+	chunk := w.BlockChunk(id)
+	if chunk != nil {
+		if tp != 0 {
+			chunk.add(id, tp)
+		} else {
+			chunk.del(id)
+		}
+	}
+	store.UpdateBlock(id, tp)
+}
+
 func IsPlant(tp int) bool {
 	if tp >= 17 && tp <= 31 {
 		return true
@@ -150,19 +162,27 @@ func (w *World) Chunk(id Vec3) *Chunk {
 	chunk := NewChunk(id)
 	blocks := makeChunkMap(id)
 	for block, tp := range blocks {
-		chunk.Add(block, tp)
+		chunk.add(block, tp)
 	}
 	err := store.RangeBlocks(id, func(bid Vec3, w int) {
 		if w == 0 {
-			chunk.Del(bid)
+			chunk.del(bid)
 			return
 		}
-		chunk.Add(bid, w)
+		chunk.add(bid, w)
 	})
 	if err != nil {
 		log.Printf("fetch chunk(%v) from db error:%s", id, err)
 		return nil
 	}
+	ClientFetchChunk(id, func(bid Vec3, w int) {
+		if w == 0 {
+			chunk.del(bid)
+			return
+		}
+		chunk.add(bid, w)
+		store.UpdateBlock(bid, w)
+	})
 	w.storeChunk(id, chunk)
 	return chunk
 }

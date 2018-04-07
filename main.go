@@ -19,6 +19,8 @@ import (
 
 var (
 	pprofPort = flag.String("pprof", "", "http pprof port")
+
+	game *Game
 )
 
 type Game struct {
@@ -29,8 +31,11 @@ type Game struct {
 	vy       float32
 	prevtime float64
 
-	blockRender *BlockRender
-	lineRender  *LineRender
+	blockRender  *BlockRender
+	lineRender   *LineRender
+	playerRender *PlayerRender
+
+	playerSyncTime float64
 
 	world   *World
 	itemidx int
@@ -85,14 +90,18 @@ func NewGame(w, h int) (*Game, error) {
 	})
 	game.world = NewWorld()
 	game.camera = NewCamera(mgl32.Vec3{0, 16, 0})
-	game.blockRender, err = NewBlockRender(game)
+	game.blockRender, err = NewBlockRender()
 	if err != nil {
 		return nil, err
 	}
 	mainthread.Call(func() {
 		game.blockRender.UpdateItem(game.item)
 	})
-	game.lineRender, err = NewLineRender(game)
+	game.lineRender, err = NewLineRender()
+	if err != nil {
+		return nil, err
+	}
+	game.playerRender, err = NewPlayerRender()
 	if err != nil {
 		return nil, err
 	}
@@ -111,11 +120,12 @@ func (g *Game) setExclusiveMouse(exclusive bool) {
 
 func (g *Game) dirtyBlock(id Vec3) {
 	cid := id.Chunkid()
+	g.blockRender.DirtyChunk(cid)
 	neighbors := []Vec3{id.Left(), id.Right(), id.Front(), id.Back()}
 	for _, neighbor := range neighbors {
 		chunkid := neighbor.Chunkid()
 		if chunkid != cid {
-			g.world.Chunk(chunkid).UpdateVersion()
+			g.blockRender.DirtyChunk(chunkid)
 		}
 	}
 }
@@ -130,18 +140,16 @@ func (g *Game) onMouseButtonCallback(win *glfw.Window, button glfw.MouseButton, 
 	block, prev := g.world.HitTest(g.camera.Pos(), g.camera.Front())
 	if button == glfw.MouseButton2 && action == glfw.Press {
 		if prev != nil && *prev != head && *prev != foot {
-			chunk := g.world.BlockChunk(*prev)
-			chunk.Add(*prev, g.item)
-			store.UpdateBlock(*prev, g.item)
+			g.world.UpdateBlock(*prev, g.item)
 			g.dirtyBlock(*prev)
+			go ClientUpdateBlock(*prev, g.item)
 		}
 	}
 	if button == glfw.MouseButton1 && action == glfw.Press {
 		if block != nil {
-			chunk := g.world.BlockChunk(*block)
-			chunk.Del(*block)
-			store.UpdateBlock(*block, 0)
+			g.world.UpdateBlock(*block, 0)
 			g.dirtyBlock(*block)
+			go ClientUpdateBlock(*block, 0)
 		}
 	}
 }
@@ -248,13 +256,16 @@ func (g *Game) renderStat() {
 func (g *Game) Update() {
 	mainthread.Call(func() {
 		var dt float64
-		if g.prevtime == 0 {
-			dt = 0
-		}
-		dt = glfw.GetTime() - g.prevtime
-		g.prevtime = glfw.GetTime()
+		now := glfw.GetTime()
+		dt = now - g.prevtime
+		g.prevtime = now
 		if dt > 0.02 {
 			dt = 0.02
+		}
+
+		if now-g.playerSyncTime >= 0.1 {
+			go ClientUpdatePlayerState(g.camera.State())
+			g.playerSyncTime = now
 		}
 
 		g.handleKeyInput(dt)
@@ -264,6 +275,7 @@ func (g *Game) Update() {
 
 		g.blockRender.Draw()
 		g.lineRender.Draw()
+		g.playerRender.Draw()
 
 		g.renderStat()
 
@@ -302,21 +314,30 @@ func run() {
 
 	err = InitStore()
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 	defer store.Close()
 
-	game, err := NewGame(800, 600)
+	game, err = NewGame(800, 600)
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
-	game.camera.Restore(store.GetCamera())
+
+	err = InitClient()
+	if err != nil {
+		log.Panic(err)
+	}
+	if client != nil {
+		defer client.Close()
+	}
+
+	game.camera.Restore(store.GetPlayerState())
 	tick := time.Tick(time.Second / 60)
 	for !game.ShouldClose() {
 		<-tick
 		game.Update()
 	}
-	store.UpdateCamera(game.camera.State())
+	store.UpdatePlayerState(game.camera.State())
 }
 
 func main() {
