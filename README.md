@@ -30,6 +30,8 @@ A Minecraft like game written in go, just for fun!
 
 ## Run
 
+Suppose `$GOPATH/bin` is in your `PATH` env, use command below to run. 
+
 `cd $GOPATH/src/github.com/icexin/gocraft && gocraft`
 
 ## How to play
@@ -50,6 +52,8 @@ You can use `gocraft -s gocraft.icexin.com` to connect the public server.
 
 Since the player on public server is anonymous, be carefull for your work!
 
+If any network error occurs, the game will end with a panic, may changed in the future.
+
 Local cache is saved as `cache_$server.db`, you can use `gocraft -db xxx.db` to offline use.
 
 ## Roadmap
@@ -61,3 +65,5 @@ Local cache is saved as `cache_$server.db`, you can use `gocraft -db xxx.db` to 
 ## Implementation Details
 
 Many implementations is inspired by https://github.com/fogleman/Craft, thanks for Fogleman's good work!
+
+Multiplayer is implementated used a duplex rpc call, client can call server to update blocks or fetch chunks, server can also push changes to clients. 
