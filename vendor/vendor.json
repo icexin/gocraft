@@ -51,6 +51,12 @@
 			"revisionTime": "2018-02-01T23:52:37Z"
 		},
 		{
+			"checksumSHA1": "vTfeYxi0Z1y176bjQaYh1/FpQ9s=",
+			"path": "github.com/hashicorp/yamux",
+			"revision": "683f49123a33db61abfb241b7ac5e4af4dc54d55",
+			"revisionTime": "2017-12-19T16:50:22Z"
+		},
+		{
 			"checksumSHA1": "A7xwIBzePMhAejFTqjOQhTHVz90=",
 			"path": "github.com/ojrac/opensimplex-go",
 			"revision": "c0d2b8b324684d1e69e72eaf01f69ff700e3396a",

@@ -4,7 +4,6 @@ import (
 	"log"
 	"math"
 	"sync"
-	"time"
 
 	"github.com/go-gl/mathgl/mgl32"
 )
@@ -54,20 +53,13 @@ func NearBlock(pos mgl32.Vec3) Vec3 {
 type Chunk struct {
 	id     Vec3
 	blocks sync.Map // map[Vec3]int
-
-	Version int64
 }
 
 func NewChunk(id Vec3) *Chunk {
 	c := &Chunk{
-		id:      id,
-		Version: time.Now().Unix(),
+		id: id,
 	}
 	return c
-}
-
-func (c *Chunk) UpdateVersion() {
-	c.Version = time.Now().UnixNano() / int64(time.Millisecond)
 }
 
 func (c *Chunk) Id() Vec3 {
@@ -85,20 +77,18 @@ func (c *Chunk) Block(id Vec3) int {
 	return 0
 }
 
-func (c *Chunk) Add(id Vec3, w int) {
+func (c *Chunk) add(id Vec3, w int) {
 	if id.Chunkid() != c.id {
 		log.Panicf("id %v chunk %v", id, c.id)
 	}
 	c.blocks.Store(id, w)
-	c.UpdateVersion()
 }
 
-func (c *Chunk) Del(id Vec3) {
+func (c *Chunk) del(id Vec3) {
 	if id.Chunkid() != c.id {
 		log.Panicf("id %v chunk %v", id, c.id)
 	}
 	c.blocks.Delete(id)
-	c.UpdateVersion()
 }
 
 func (c *Chunk) RangeBlocks(f func(id Vec3, w int)) {

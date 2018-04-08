@@ -3,11 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"flag"
+	"fmt"
 	"log"
 
 	"github.com/boltdb/bolt"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 var (
@@ -16,17 +17,25 @@ var (
 
 var (
 	blockBucket  = []byte("block")
+	chunkBucket  = []byte("chunk")
 	cameraBucket = []byte("camera")
 
 	store *Store
 )
 
 func InitStore() error {
-	if *dbpath == "" {
-		return nil
+	var path string
+	if *dbpath != "" {
+		path = *dbpath
+	}
+	if *serverAddr != "" {
+		path = fmt.Sprintf("cache_%s.db", *serverAddr)
+	}
+	if path == "" {
+		return errors.New("empty db path")
 	}
 	var err error
-	store, err = NewStore(*dbpath)
+	store, err = NewStore(path)
 	return err
 }
 
@@ -41,6 +50,10 @@ func NewStore(p string) (*Store, error) {
 	}
 	err = db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(blockBucket)
+		if err != nil {
+			return err
+		}
+		_, err = tx.CreateBucketIfNotExists(chunkBucket)
 		if err != nil {
 			return err
 		}
@@ -67,20 +80,19 @@ func (s *Store) UpdateBlock(id Vec3, w int) error {
 	})
 }
 
-func (s *Store) UpdateCamera(pos mgl32.Vec3, rx, ry float32) error {
+func (s *Store) UpdatePlayerState(state PlayerState) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(cameraBucket)
 		buf := new(bytes.Buffer)
-		binary.Write(buf, binary.LittleEndian, &pos)
-		binary.Write(buf, binary.LittleEndian, [...]float32{rx, ry})
+		binary.Write(buf, binary.LittleEndian, &state)
 		bkt.Put(cameraBucket, buf.Bytes())
 		return nil
 	})
 }
 
-func (s *Store) GetCamera() (mgl32.Vec3, float32, float32) {
-	var pos = mgl32.Vec3{0, 16, 0}
-	var rx, ry float32
+func (s *Store) GetPlayerState() PlayerState {
+	var state PlayerState
+	state.Y = 16
 	s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(cameraBucket)
 		value := bkt.Get(cameraBucket)
@@ -88,12 +100,10 @@ func (s *Store) GetCamera() (mgl32.Vec3, float32, float32) {
 			return nil
 		}
 		buf := bytes.NewBuffer(value)
-		binary.Read(buf, binary.LittleEndian, &pos)
-		binary.Read(buf, binary.LittleEndian, &rx)
-		binary.Read(buf, binary.LittleEndian, &ry)
+		binary.Read(buf, binary.LittleEndian, &state)
 		return nil
 	})
-	return pos, rx, ry
+	return state
 }
 
 func (s *Store) RangeBlocks(id Vec3, f func(bid Vec3, w int)) error {
@@ -113,9 +123,37 @@ func (s *Store) RangeBlocks(id Vec3, f func(bid Vec3, w int)) error {
 	})
 }
 
+func (s *Store) UpdateChunkVersion(id Vec3, version string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(chunkBucket)
+		key := encodeVec3(id)
+		return bkt.Put(key, []byte(version))
+	})
+}
+
+func (s *Store) GetChunkVersion(id Vec3) string {
+	var version string
+	s.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(chunkBucket)
+		key := encodeVec3(id)
+		v := bkt.Get(key)
+		if v != nil {
+			version = string(v)
+		}
+		return nil
+	})
+	return version
+}
+
 func (s *Store) Close() {
 	s.db.Sync()
 	s.db.Close()
+}
+
+func encodeVec3(v Vec3) []byte {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, [...]int32{int32(v.X), int32(v.Y), int32(v.Z)})
+	return buf.Bytes()
 }
 
 func encodeBlockDbKey(cid, bid Vec3) []byte {
