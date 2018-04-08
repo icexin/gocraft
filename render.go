@@ -307,8 +307,9 @@ func (r *BlockRender) updateMeshCache() {
 // called on mainthread
 func (r *BlockRender) forceChunks(ids []Vec3) {
 	var removedMesh []*Mesh
-	for _, id := range ids {
-		chunk := game.world.Chunk(id)
+	chunks := game.world.Chunks(ids)
+	for _, chunk := range chunks {
+		id := chunk.Id()
 		imesh, ok := r.meshcache.Load(id)
 		var mesh *Mesh
 		if ok {

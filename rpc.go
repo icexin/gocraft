@@ -4,6 +4,8 @@ import (
 	"flag"
 	"log"
 	"net"
+	"net/rpc"
+	"strings"
 
 	gocraft "github.com/icexin/gocraft-server/client"
 	"github.com/icexin/gocraft-server/proto"
@@ -19,7 +21,11 @@ func InitClient() error {
 	if *serverAddr == "" {
 		return nil
 	}
-	conn, err := net.Dial("tcp", *serverAddr)
+	addr := *serverAddr
+	if strings.Index(addr, ":") == -1 {
+		addr += ":8421"
+	}
+	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return err
 	}
@@ -41,6 +47,9 @@ func ClientFetchChunk(id Vec3, f func(bid Vec3, w int)) {
 	}
 	rep := new(proto.FetchChunkResponse)
 	err := client.Call("Block.FetchChunk", req, rep)
+	if err == rpc.ErrShutdown {
+		return
+	}
 	if err != nil {
 		log.Panic(err)
 	}
@@ -68,6 +77,9 @@ func ClientUpdateBlock(id Vec3, w int) {
 	}
 	rep := new(proto.UpdateBlockResponse)
 	err := client.Call("Block.UpdateBlock", req, rep)
+	if err == rpc.ErrShutdown {
+		return
+	}
 	if err != nil {
 		log.Panic(err)
 	}
@@ -85,6 +97,9 @@ func ClientUpdatePlayerState(state PlayerState) {
 	s.X, s.Y, s.Z, s.Rx, s.Ry = state.X, state.Y, state.Z, state.Rx, state.Ry
 	rep := new(proto.UpdateStateResponse)
 	err := client.Call("Player.UpdateState", req, rep)
+	if err == rpc.ErrShutdown {
+		return
+	}
 	if err != nil {
 		log.Panic(err)
 	}

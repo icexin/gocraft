@@ -35,8 +35,6 @@ type Game struct {
 	lineRender   *LineRender
 	playerRender *PlayerRender
 
-	playerSyncTime float64
-
 	world   *World
 	itemidx int
 	item    int
@@ -106,6 +104,7 @@ func NewGame(w, h int) (*Game, error) {
 		return nil, err
 	}
 	go game.blockRender.UpdateLoop()
+	go game.syncPlayerLoop()
 	return game, nil
 }
 
@@ -253,6 +252,13 @@ func (g *Game) renderStat() {
 	g.win.SetTitle(title)
 }
 
+func (g *Game) syncPlayerLoop() {
+	tick := time.NewTicker(time.Second / 10)
+	for range tick.C {
+		ClientUpdatePlayerState(g.camera.State())
+	}
+}
+
 func (g *Game) Update() {
 	mainthread.Call(func() {
 		var dt float64
@@ -261,11 +267,6 @@ func (g *Game) Update() {
 		g.prevtime = now
 		if dt > 0.02 {
 			dt = 0.02
-		}
-
-		if now-g.playerSyncTime >= 0.1 {
-			go ClientUpdatePlayerState(g.camera.State())
-			g.playerSyncTime = now
 		}
 
 		g.handleKeyInput(dt)
@@ -318,17 +319,17 @@ func run() {
 	}
 	defer store.Close()
 
-	game, err = NewGame(800, 600)
-	if err != nil {
-		log.Panic(err)
-	}
-
 	err = InitClient()
 	if err != nil {
 		log.Panic(err)
 	}
 	if client != nil {
 		defer client.Close()
+	}
+
+	game, err = NewGame(800, 600)
+	if err != nil {
+		log.Panic(err)
 	}
 
 	game.camera.Restore(store.GetPlayerState())
