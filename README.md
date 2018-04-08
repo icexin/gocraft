@@ -9,6 +9,7 @@ A Minecraft like game written in go, just for fun!
 - Basic terrain generation
 - Add and Remove blocks.
 - Move and fly.
+- Multiplayer support
 
 ## Dependencies
 
@@ -39,10 +40,22 @@ A Minecraft like game written in go, just for fun!
 - Left and right click to add/remove block.
 - E,R to cycle through the blocks.
 
+## Multiplayer
+
+Multiplayer is supported now!
+
+The server code is at https://github.com/icexin/gocraft-server .
+
+You can use `gocraft -s gocraft.icexin.com` to connect the public server.
+
+Since the player on public server is anonymous, be carefull for your work!
+
+Local cache is saved as `cache_$server.db`, you can use `gocraft -db xxx.db` to offline use.
+
 ## Roadmap
 
 - [x] Persistent changed blocks
-- [ ] Multiplayer support
+- [x] Multiplayer support
 - [ ] Ambient Occlusion support
 
 ## Implementation Details
