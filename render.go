@@ -207,33 +207,26 @@ func (r *BlockRender) get2dmat() mgl32.Mat4 {
 	return mat
 }
 
-func (r *BlockRender) sortNeededChunks(m map[Vec3]bool) []Vec3 {
-	i := 0
-	keys := make([]Vec3, len(m))
-	for k := range m {
-		keys[i] = k
-		i++
-	}
-
+func (r *BlockRender) sortChunks(chunks []Vec3) []Vec3 {
 	cid := NearBlock(game.camera.Pos()).Chunkid()
 	x, z := cid.X, cid.Z
 	mat := r.get3dmat()
 	planes := frustumPlanes(&mat)
 
-	sort.Slice(keys, func(i, j int) bool {
-		v1 := isChunkVisiable(planes, keys[i])
-		v2 := isChunkVisiable(planes, keys[j])
+	sort.Slice(chunks, func(i, j int) bool {
+		v1 := isChunkVisiable(planes, chunks[i])
+		v2 := isChunkVisiable(planes, chunks[j])
 		if v1 && !v2 {
 			return true
 		}
 		if v2 && !v1 {
 			return false
 		}
-		d1 := (keys[i].X-x)*(keys[i].X-x) + (keys[i].Z-z)*(keys[i].Z-z)
-		d2 := (keys[j].X-x)*(keys[j].X-x) + (keys[j].Z-z)*(keys[j].Z-z)
+		d1 := (chunks[i].X-x)*(chunks[i].X-x) + (chunks[i].Z-z)*(chunks[i].Z-z)
+		d2 := (chunks[j].X-x)*(chunks[j].X-x) + (chunks[j].Z-z)*(chunks[j].Z-z)
 		return d1 < d2
 	})
-	return keys
+	return chunks
 }
 
 func (r *BlockRender) updateMeshCache() {
@@ -262,13 +255,7 @@ func (r *BlockRender) updateMeshCache() {
 		return true
 	})
 
-	neededChunks := r.sortNeededChunks(needed)
-	// 单次并发构造的chunk个数
-	const batchBuildChunk = 4
-	for _, id := range neededChunks {
-		if len(added) > batchBuildChunk {
-			break
-		}
+	for id := range needed {
 		mesh, ok := r.meshcache.Load(id)
 		// 不在cache里面的需要重新构建
 		if !ok {
@@ -280,6 +267,12 @@ func (r *BlockRender) updateMeshCache() {
 				removed = append(removed, id)
 			}
 		}
+	}
+	// 单次并发构造的chunk个数
+	const batchBuildChunk = 4
+	r.sortChunks(added)
+	if len(added) > 4 {
+		added = added[:batchBuildChunk]
 	}
 
 	var removedMesh []*Mesh
