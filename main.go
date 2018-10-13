@@ -18,12 +18,16 @@ import (
 )
 
 var (
+	// 第一个参数 ：flag名称为flagname
+	// 第二个参数 ：flagname默认值为1234
+	// 第三个参数 ：flagname的提示信息
 	pprofPort = flag.String("pprof", "", "http pprof port")
 
 	game *Game
 )
 
 type Game struct {
+	// glfw 负责创建窗口，处理消息循环
 	win *glfw.Window
 
 	camera   *Camera
@@ -49,21 +53,26 @@ func initGL(w, h int) *glfw.Window {
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	// 告诉 glfw opengl的版本为 3.3
 	glfw.WindowHint(glfw.ContextVersionMajor, 3)
 	glfw.WindowHint(glfw.ContextVersionMinor, 3)
+	// 使用 opengl 核心模式 Core 模式
 	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
+	// 如果使用的是Mac OS X系统，你还需要加下面这行代码到你的初始化代码中这些配置才能起作用
 	glfw.WindowHint(glfw.OpenGLForwardCompatible, gl.TRUE)
 
 	win, err := glfw.CreateWindow(w, h, "gocraft", nil, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
+	// 创建一个 OpenGL 窗口上下文，使上下文成为当前窗口
 	win.MakeContextCurrent()
+	// 初始化 opengl
 	err = gl.Init()
 	if err != nil {
 		log.Fatal(err)
 	}
+	
 	glfw.SwapInterval(1) // enable vsync
 	gl.Enable(gl.DEPTH_TEST)
 	gl.Enable(gl.CULL_FACE)

@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	sim = opensimplex.NewWithSeed(0)
+	sim = opensimplex.New(0)
 )
 
 func abs(x float32) float32 {
