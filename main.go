@@ -216,6 +216,9 @@ func (g *Game) handleKeyInput(dt float64) {
 	if g.win.GetKey(glfw.KeyD) == glfw.Press {
 		g.camera.OnMoveChange(MoveRight, speed)
 	}
+	if g.win.GetKey(glfw.KeyLeftShift) == glfw.Press && g.win.GetKey(glfw.KeyW) == glfw.Press {
+		g.camera.OnMoveChange(MoveForward, speed * 1.2)
+	}
 	pos := g.camera.Pos()
 	stop := false
 	if !g.camera.Flying() {
