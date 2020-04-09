@@ -136,61 +136,13 @@ var itemDesc = map[int][6]int{
 	64: {226, 224, 241, 209, 227, 225},
 }
 
-var availableItems = []int{
-	1,
-	2,
-	3,
-	4,
-	5,
-	6,
-	7,
-	8,
-	9,
-	10,
-	11,
-	12,
-	13,
-	14,
-	15,
-	16,
-	17,
-	18,
-	19,
-	20,
-	21,
-	22,
-	23,
-	32,
-	33,
-	34,
-	35,
-	36,
-	37,
-	38,
-	39,
-	40,
-	41,
-	42,
-	43,
-	44,
-	45,
-	46,
-	47,
-	48,
-	49,
-	50,
-	51,
-	52,
-	53,
-	54,
-	55,
-	56,
-	57,
-	58,
-	59,
-	60,
-	61,
-	62,
-	63,
-	64,
+// calculate itemList based on itemDesc dynamically
+func generateItemList(itemMap map[int][6]int) []int {
+	list := make([]int, len(itemMap)-1)
+	for key := range list {
+		list[key] = key + 1
+	}
+	return list
 }
+
+var availableItems = generateItemList(itemDesc)
