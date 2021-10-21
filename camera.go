@@ -18,7 +18,7 @@ type Camera struct {
 	front  mgl32.Vec3
 	wfront mgl32.Vec3
 
-	rotatex, rotatey float32
+	rotatex, rotatey, rotatesens float32
 
 	Sens float32
 
@@ -27,12 +27,13 @@ type Camera struct {
 
 func NewCamera(pos mgl32.Vec3) *Camera {
 	c := &Camera{
-		pos:     pos,
-		front:   mgl32.Vec3{0, 0, -1},
-		rotatey: 0,
-		rotatex: -90,
-		Sens:    0.14,
-		flying:  false,
+		pos:        pos,
+		front:      mgl32.Vec3{0, 0, -1},
+		rotatey:    0,
+		rotatex:    -90,
+		rotatesens: 0.5,
+		Sens:       0.14,
+		flying:     false,
 	}
 	c.updateAngles()
 	return c
@@ -83,8 +84,8 @@ func (c *Camera) OnAngleChange(dx, dy float32) {
 	if mgl32.Abs(dx) > 200 || mgl32.Abs(dy) > 200 {
 		return
 	}
-	c.rotatex += dx * c.Sens
-	c.rotatey += dy * c.Sens
+	c.rotatex += dx * c.Sens * c.rotatesens
+	c.rotatey += dy * c.Sens * c.rotatesens
 	if c.rotatey > 89 {
 		c.rotatey = 89
 	}
