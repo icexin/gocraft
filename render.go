@@ -91,7 +91,7 @@ func NewBlockRender() (*BlockRender, error) {
 	return r, nil
 }
 
-func (r *BlockRender) makeChunkMesh(c *Chunk, onmainthread bool) *Mesh {
+func (r *BlockRender) addChunkMesh(c *Chunk, onmainthread bool) {
 	facedata := r.facePool.Get().([]float32)
 	defer r.facePool.Put(facedata[:0])
 
@@ -118,13 +118,15 @@ func (r *BlockRender) makeChunkMesh(c *Chunk, onmainthread bool) *Mesh {
 	var mesh *Mesh
 	if onmainthread {
 		mesh = NewMesh(r.shader, facedata)
+		mesh.Id = c.Id()
+		r.meshcache.Store(c.Id(), mesh)
 	} else {
-		mainthread.Call(func() {
+		mainthread.CallNonBlock(func() {
 			mesh = NewMesh(r.shader, facedata)
+			mesh.Id = c.Id()
+			r.meshcache.Store(c.Id(), mesh)
 		})
 	}
-	mesh.Id = c.Id()
-	return mesh
 }
 
 // call on mainthread
@@ -286,7 +288,7 @@ func (r *BlockRender) updateMeshCache() {
 	newChunks := game.world.Chunks(added)
 	for _, c := range newChunks {
 		log.Printf("add cache %v", c.Id())
-		r.meshcache.Store(c.Id(), r.makeChunkMesh(c, false))
+		r.addChunkMesh(c, false)
 	}
 
 	mainthread.CallNonBlock(func() {
@@ -311,7 +313,7 @@ func (r *BlockRender) forceChunks(ids []Vec3) {
 		if ok && !mesh.Dirty {
 			continue
 		}
-		r.meshcache.Store(id, r.makeChunkMesh(chunk, true))
+		r.addChunkMesh(chunk)
 		if ok {
 			removedMesh = append(removedMesh, mesh)
 		}
