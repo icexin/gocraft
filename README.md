@@ -15,7 +15,7 @@ A Minecraft like game written in go, just for fun!
 
 ### For go
 
-- go 1.10+
+- go 1.21+
 
 ### For glfw
 
