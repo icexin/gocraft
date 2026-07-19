@@ -4,10 +4,9 @@ in vec2 Tex;
 in float diff;
 in float fog_factor;
 uniform sampler2D tex;
+uniform vec3 sky_color;
 
 out vec4 FragColor;
-
-const vec3 sky_color = vec3(0.57, 0.71, 0.77);
 
 void main() {
     vec3 color = vec3(texture(tex, vec2(Tex.x, 1-Tex.y)));

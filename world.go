@@ -1,12 +1,31 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"sync"
 
 	"github.com/go-gl/mathgl/mgl32"
 	lru "github.com/hashicorp/golang-lru"
 )
+
+var importedWorld = flag.Bool("imported", false, "use imported world (skip procedural generation)")
+
+var (
+	skyColorDefault  = mgl32.Vec3{0.57, 0.71, 0.77}
+	skyColorImported = mgl32.Vec3{0.1, 0.1, 0.15}
+)
+
+func SkyColor() mgl32.Vec3 {
+	if *importedWorld {
+		return skyColorImported
+	}
+	return skyColorDefault
+}
+
+type BlockGetter interface {
+	GetBlock(id Vec3) int
+}
 
 type World struct {
 	mutex  sync.Mutex
@@ -33,7 +52,11 @@ func (w *World) storeChunk(id Vec3, chunk *Chunk) {
 	w.chunks.Add(id, chunk)
 }
 
-func (w *World) Collide(pos mgl32.Vec3) (mgl32.Vec3, bool) {
+func (w *World) GetBlock(id Vec3) int {
+	return w.Block(id)
+}
+
+func CollideStep(bg BlockGetter, pos mgl32.Vec3) (mgl32.Vec3, bool) {
 	x, y, z := pos.X(), pos.Y(), pos.Z()
 	nx, ny, nz := round(pos.X()), round(pos.Y()), round(pos.Z())
 	const pad = 0.25
@@ -43,28 +66,56 @@ func (w *World) Collide(pos mgl32.Vec3) (mgl32.Vec3, bool) {
 
 	stop := false
 	for _, b := range []Vec3{foot, head} {
-		if IsObstacle(w.Block(b.Left())) && x < nx && nx-x > pad {
+		if IsObstacle(bg.GetBlock(b.Left())) && x < nx && nx-x > pad {
 			x = nx - pad
 		}
-		if IsObstacle(w.Block(b.Right())) && x > nx && x-nx > pad {
+		if IsObstacle(bg.GetBlock(b.Right())) && x > nx && x-nx > pad {
 			x = nx + pad
 		}
-		if IsObstacle(w.Block(b.Down())) && y < ny && ny-y > pad {
+		if IsObstacle(bg.GetBlock(b.Down())) && y < ny && ny-y > pad {
 			y = ny - pad
 			stop = true
 		}
-		if IsObstacle(w.Block(b.Up())) && y > ny && y-ny > pad {
+		if IsObstacle(bg.GetBlock(b.Up())) && y > ny && y-ny > pad {
 			y = ny + pad
 			stop = true
 		}
-		if IsObstacle(w.Block(b.Back())) && z < nz && nz-z > pad {
+		if IsObstacle(bg.GetBlock(b.Back())) && z < nz && nz-z > pad {
 			z = nz - pad
 		}
-		if IsObstacle(w.Block(b.Front())) && z > nz && z-nz > pad {
+		if IsObstacle(bg.GetBlock(b.Front())) && z > nz && z-nz > pad {
 			z = nz + pad
 		}
 	}
 	return mgl32.Vec3{x, y, z}, stop
+}
+
+const maxStepSize = 0.2
+
+func CollideStepped(bg BlockGetter, from, to mgl32.Vec3) (mgl32.Vec3, bool) {
+	delta := to.Sub(from)
+	dist := delta.Len()
+	if dist < 0.001 {
+		return CollideStep(bg, to)
+	}
+
+	steps := int(dist/maxStepSize) + 1
+	pos := from
+	dir := delta.Mul(1 / float32(steps))
+	stop := false
+	for i := 0; i < steps; i++ {
+		target := pos.Add(dir)
+		var s bool
+		pos, s = CollideStep(bg, target)
+		if s {
+			stop = true
+		}
+	}
+	return pos, stop
+}
+
+func (w *World) Collide(pos mgl32.Vec3) (mgl32.Vec3, bool) {
+	return CollideStep(w, pos)
 }
 
 func (w *World) HitTest(pos mgl32.Vec3, vec mgl32.Vec3) (*Vec3, *Vec3) {
@@ -160,9 +211,11 @@ func (w *World) Chunk(id Vec3) *Chunk {
 		return p
 	}
 	chunk := NewChunk(id)
-	blocks := makeChunkMap(id)
-	for block, tp := range blocks {
-		chunk.add(block, tp)
+	if !*importedWorld {
+		blocks := makeChunkMap(id)
+		for block, tp := range blocks {
+			chunk.add(block, tp)
+		}
 	}
 	err := store.RangeBlocks(id, func(bid Vec3, w int) {
 		if w == 0 {

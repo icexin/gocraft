@@ -71,6 +71,7 @@ func NewBlockRender() (*BlockRender, error) {
 			glhf.Attr{Name: "matrix", Type: glhf.Mat4},
 			glhf.Attr{Name: "camera", Type: glhf.Vec3},
 			glhf.Attr{Name: "fogdis", Type: glhf.Float},
+			glhf.Attr{Name: "sky_color", Type: glhf.Vec3},
 		}, blockVertexSource, blockFragmentSource)
 
 		if err != nil {
@@ -369,6 +370,7 @@ func (r *BlockRender) drawChunks() {
 	r.shader.SetUniformAttr(0, mat)
 	r.shader.SetUniformAttr(1, game.camera.Pos())
 	r.shader.SetUniformAttr(2, float32(*renderRadius)*ChunkWidth)
+	r.shader.SetUniformAttr(3, SkyColor())
 
 	planes := frustumPlanes(&mat)
 	r.stat = Stat{}
@@ -398,6 +400,7 @@ func (r *BlockRender) drawItem() {
 	r.shader.SetUniformAttr(0, mat)
 	r.shader.SetUniformAttr(1, mgl32.Vec3{0, 0, 0})
 	r.shader.SetUniformAttr(2, float32(*renderRadius)*ChunkWidth)
+	r.shader.SetUniformAttr(3, SkyColor())
 	r.item.Draw()
 }
 

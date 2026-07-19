@@ -4,6 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	_ "image/png"
@@ -204,6 +207,7 @@ func (g *Game) handleKeyInput(dt float64) {
 	if g.win.GetKey(glfw.KeyEscape) == glfw.Press {
 		g.setExclusiveMouse(false)
 	}
+	prev := g.camera.Pos()
 	if g.win.GetKey(glfw.KeyW) == glfw.Press {
 		g.camera.OnMoveChange(MoveForward, speed)
 	}
@@ -226,7 +230,7 @@ func (g *Game) handleKeyInput(dt float64) {
 		pos = mgl32.Vec3{pos.X(), pos.Y() + g.vy*float32(dt), pos.Z()}
 	}
 
-	pos, stop = g.world.Collide(pos)
+	pos, stop = CollideStepped(g.world, prev, pos)
 	if stop {
 		g.vy = 0
 	}
@@ -271,7 +275,8 @@ func (g *Game) Update() {
 
 		g.handleKeyInput(dt)
 
-		gl.ClearColor(0.57, 0.71, 0.77, 1)
+		sky := SkyColor()
+		gl.ClearColor(sky.X(), sky.Y(), sky.Z(), 1)
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 		g.blockRender.Draw()
@@ -333,12 +338,24 @@ func run() {
 	}
 
 	game.camera.Restore(store.GetPlayerState())
+	stopCh := SetupSignalHandler()
+	go func() {
+		<-stopCh
+		log.Println("received shutdown signal")
+		game.closed = true
+	}()
 	tick := time.Tick(time.Second / 60)
 	for !game.ShouldClose() {
 		<-tick
 		game.Update()
 	}
 	store.UpdatePlayerState(game.camera.State())
+}
+
+func SetupSignalHandler() <-chan os.Signal {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+	return ch
 }
 
 func main() {
