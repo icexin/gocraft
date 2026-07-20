@@ -185,6 +185,37 @@ func TestCollideSteppedZeroMovement(t *testing.T) {
 	}
 }
 
+func TestCrouchEdgePrevention(t *testing.T) {
+	bg := NewMockBlockGetter()
+	bg.FillFloor(0, 0, 5, 0, 5)
+
+	from := mgl32.Vec3{2, 1, 2}
+	to := mgl32.Vec3{-1, 1, 2}
+
+	t.Logf("fromCenter block = %d", bg.GetBlock(Vec3{2, 0, 2}))
+
+	result, _ := CollideCrouch(bg, from, to)
+	if result.X() < -0.1 {
+		t.Errorf("crouch should prevent falling off edge, got x=%f", result.X())
+	}
+	if result.X() < from.X()-0.5 {
+		t.Logf("edge prevention clamped: from x=%f to x=%f (good)", from.X(), result.X())
+	}
+}
+
+func TestCrouchNoEdgeOnSolidGround(t *testing.T) {
+	bg := NewMockBlockGetter()
+	bg.FillFloor(-1, -10, 10, -10, 10)
+
+	from := mgl32.Vec3{2, 1, 2}
+	to := mgl32.Vec3{4, 1, 2}
+
+	result, _ := CollideCrouch(bg, from, to)
+	if result.X() < 3.5 {
+		t.Errorf("on solid ground (y=-1), crouch should allow free movement, got x=%f, want ~4", result.X())
+	}
+}
+
 func TestIsObstacleClassification(t *testing.T) {
 	tests := []struct {
 		tp       int
@@ -224,19 +255,23 @@ func TestIsPlantClassification(t *testing.T) {
 }
 
 func TestSkyColorDefault(t *testing.T) {
-	*importedWorld = false
+	old := gameClock
+	gameClock = nil
+	defer func() { gameClock = old }()
 	sky := SkyColor()
 	if sky.X() < 0.5 || sky.Y() < 0.5 || sky.Z() < 0.5 {
 		t.Errorf("default sky should be bright, got %v", sky)
 	}
 }
 
-func TestSkyColorImported(t *testing.T) {
-	*importedWorld = true
-	defer func() { *importedWorld = false }()
+func TestSkyColorWithClock(t *testing.T) {
+	c := NewGameClock(600)
+	old := gameClock
+	gameClock = c
+	defer func() { gameClock = old }()
 	sky := SkyColor()
-	if sky.X() > 0.2 || sky.Y() > 0.2 || sky.Z() > 0.2 {
-		t.Errorf("imported sky should be dark, got %v", sky)
+	if sky.X() < 0.3 {
+		t.Errorf("sky with clock at default time should not be too dark, got %v", sky)
 	}
 }
 

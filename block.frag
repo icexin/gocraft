@@ -5,6 +5,7 @@ in float diff;
 in float fog_factor;
 uniform sampler2D tex;
 uniform vec3 sky_color;
+uniform float ambient_level;
 
 out vec4 FragColor;
 
@@ -17,8 +18,8 @@ void main() {
     if (color == vec3(1,1,1)) {
         df = 1- diff * 0.2;
     }
-    vec3 ambient = 0.5 * vec3(1, 1, 1);
-    vec3 diffcolor = df * 0.5 * vec3(1,1,1);
+    vec3 ambient = ambient_level * vec3(1, 1, 1);
+    vec3 diffcolor = df * (1.0 - ambient_level) * vec3(1,1,1);
     color = (ambient + diffcolor) * color;
     color = mix(color, sky_color, fog_factor);
     FragColor = vec4(color, 1);

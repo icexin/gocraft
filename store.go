@@ -7,6 +7,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"sync"
+	"time"
 
 	"github.com/boltdb/bolt"
 )
@@ -40,7 +42,8 @@ func InitStore() error {
 }
 
 type Store struct {
-	db *bolt.DB
+	db    *bolt.DB
+	queue *WriteQueue
 }
 
 func NewStore(p string) (*Store, error) {
@@ -64,14 +67,19 @@ func NewStore(p string) (*Store, error) {
 		return nil, err
 	}
 	db.NoSync = true
-	return &Store{
+	s := &Store{
 		db: db,
-	}, nil
+	}
+	s.queue = NewWriteQueue(s, 500*time.Millisecond)
+	return s, nil
 }
 
-func (s *Store) UpdateBlock(id Vec3, w int) error {
+func (s *Store) UpdateBlock(id Vec3, w int) {
+	s.queue.Enqueue(id, w)
+}
+
+func (s *Store) updateBlockDirect(id Vec3, w int) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
-		log.Printf("put %v -> %d", id, w)
 		bkt := tx.Bucket(blockBucket)
 		cid := id.Chunkid()
 		key := encodeBlockDbKey(cid, id)
@@ -92,7 +100,9 @@ func (s *Store) UpdatePlayerState(state PlayerState) error {
 
 func (s *Store) GetPlayerState() PlayerState {
 	var state PlayerState
-	state.Y = 16
+	state.X = 5
+	state.Y = float32(castleBaseY + 5)
+	state.Z = 20
 	s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(cameraBucket)
 		value := bkt.Get(cameraBucket)
@@ -146,8 +156,87 @@ func (s *Store) GetChunkVersion(id Vec3) string {
 }
 
 func (s *Store) Close() {
+	s.queue.Stop()
 	s.db.Sync()
 	s.db.Close()
+}
+
+type writeEntry struct {
+	id Vec3
+	tp int
+}
+
+type WriteQueue struct {
+	mu      sync.Mutex
+	pending []writeEntry
+	store   *Store
+	ticker  *time.Ticker
+	stopCh  chan struct{}
+	done    chan struct{}
+}
+
+func NewWriteQueue(s *Store, interval time.Duration) *WriteQueue {
+	q := &WriteQueue{
+		store:  s,
+		ticker: time.NewTicker(interval),
+		stopCh: make(chan struct{}),
+		done:   make(chan struct{}),
+	}
+	go q.run()
+	return q
+}
+
+func (q *WriteQueue) Enqueue(id Vec3, tp int) {
+	q.mu.Lock()
+	q.pending = append(q.pending, writeEntry{id, tp})
+	q.mu.Unlock()
+}
+
+func (q *WriteQueue) Flush() int {
+	q.mu.Lock()
+	entries := q.pending
+	q.pending = nil
+	q.mu.Unlock()
+	if len(entries) == 0 {
+		return 0
+	}
+	err := q.store.db.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(blockBucket)
+		for _, e := range entries {
+			cid := e.id.Chunkid()
+			key := encodeBlockDbKey(cid, e.id)
+			value := encodeBlockDbValue(e.tp)
+			if err := bkt.Put(key, value); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("write queue flush error: %s", err)
+		return 0
+	}
+	q.store.db.Sync()
+	return len(entries)
+}
+
+func (q *WriteQueue) run() {
+	defer close(q.done)
+	for {
+		select {
+		case <-q.ticker.C:
+			q.Flush()
+		case <-q.stopCh:
+			q.Flush()
+			return
+		}
+	}
+}
+
+func (q *WriteQueue) Stop() {
+	q.ticker.Stop()
+	close(q.stopCh)
+	<-q.done
 }
 
 func encodeVec3(v Vec3) []byte {

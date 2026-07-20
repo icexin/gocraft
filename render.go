@@ -12,6 +12,7 @@ import (
 	"github.com/faiface/glhf"
 	"github.com/faiface/mainthread"
 	"github.com/go-gl/gl/v3.3-core/gl"
+	"github.com/go-gl/glfw/v3.2/glfw"
 	"github.com/go-gl/mathgl/mgl32"
 )
 
@@ -72,6 +73,8 @@ func NewBlockRender() (*BlockRender, error) {
 			glhf.Attr{Name: "camera", Type: glhf.Vec3},
 			glhf.Attr{Name: "fogdis", Type: glhf.Float},
 			glhf.Attr{Name: "sky_color", Type: glhf.Vec3},
+			glhf.Attr{Name: "light_dir", Type: glhf.Vec3},
+			glhf.Attr{Name: "ambient_level", Type: glhf.Float},
 		}, blockVertexSource, blockFragmentSource)
 
 		if err != nil {
@@ -196,7 +199,11 @@ func isChunkVisiable(planes []mgl32.Vec4, id Vec3) bool {
 func (r *BlockRender) get3dmat() mgl32.Mat4 {
 	n := float32(*renderRadius * ChunkWidth)
 	width, height := game.win.GetSize()
-	mat := mgl32.Perspective(radian(45), float32(width)/float32(height), 0.01, n)
+	fov := game.camera.CurrentFOV()
+	if fov < 30 || fov > 120 {
+		fov = 65
+	}
+	mat := mgl32.Perspective(radian(fov), float32(width)/float32(height), 0.01, n)
 	mat = mat.Mul4(game.camera.Matrix())
 	return mat
 }
@@ -371,6 +378,13 @@ func (r *BlockRender) drawChunks() {
 	r.shader.SetUniformAttr(1, game.camera.Pos())
 	r.shader.SetUniformAttr(2, float32(*renderRadius)*ChunkWidth)
 	r.shader.SetUniformAttr(3, SkyColor())
+	if gameClock != nil {
+		r.shader.SetUniformAttr(4, gameClock.SunDirection())
+		r.shader.SetUniformAttr(5, gameClock.AmbientLevel())
+	} else {
+		r.shader.SetUniformAttr(4, mgl32.Vec3{-1, 1, -1}.Normalize())
+		r.shader.SetUniformAttr(5, float32(0.5))
+	}
 
 	planes := frustumPlanes(&mat)
 	r.stat = Stat{}
@@ -401,6 +415,8 @@ func (r *BlockRender) drawItem() {
 	r.shader.SetUniformAttr(1, mgl32.Vec3{0, 0, 0})
 	r.shader.SetUniformAttr(2, float32(*renderRadius)*ChunkWidth)
 	r.shader.SetUniformAttr(3, SkyColor())
+	r.shader.SetUniformAttr(4, mgl32.Vec3{-1, 1, -1}.Normalize())
+	r.shader.SetUniformAttr(5, float32(0.5))
 	r.item.Draw()
 }
 
@@ -544,6 +560,7 @@ func NewLines(shader *glhf.Shader, data []float32) *Lines {
 func (l *Lines) Draw(mat mgl32.Mat4) {
 	if l.vao != 0 {
 		l.shader.SetUniformAttr(0, mat)
+		l.shader.SetUniformAttr(1, float32(glfw.GetTime()))
 		gl.BindVertexArray(l.vao)
 		gl.DrawArrays(gl.LINES, 0, int32(l.nvertex))
 		gl.BindVertexArray(0)
@@ -560,10 +577,12 @@ func (l *Lines) Release() {
 }
 
 type LineRender struct {
-	shader    *glhf.Shader
-	cross     *Lines
-	wireFrame *Lines
-	lastBlock Vec3
+	shader        *glhf.Shader
+	cross         *Lines
+	wireFrame     *Lines
+	placementFrame *Lines
+	lastBlock     Vec3
+	lastPrev      Vec3
 }
 
 func NewLineRender() (*LineRender, error) {
@@ -574,6 +593,7 @@ func NewLineRender() (*LineRender, error) {
 			glhf.Attr{Name: "pos", Type: glhf.Vec3},
 		}, glhf.AttrFormat{
 			glhf.Attr{Name: "matrix", Type: glhf.Mat4},
+			glhf.Attr{Name: "time", Type: glhf.Float},
 		}, lineVertexSource, lineFragmentSource)
 
 		if err != nil {
@@ -596,44 +616,58 @@ func (r *LineRender) drawCross() {
 }
 
 func (r *LineRender) drawWireFrame(mat mgl32.Mat4) {
-	var vertices []float32
-	block, _ := game.world.HitTest(game.camera.Pos(), game.camera.Front())
+	block, prev := game.world.HitTest(game.camera.Pos(), game.camera.Front())
 	if block == nil {
 		return
 	}
 
-	mat = mat.Mul4(mgl32.Translate3D(float32(block.X), float32(block.Y), float32(block.Z)))
-	mat = mat.Mul4(mgl32.Scale3D(1.06, 1.06, 1.06))
-	if *block == r.lastBlock {
-		r.wireFrame.Draw(mat)
-		return
-	}
+	const wireEpsilon = 0.002
+	blockMat := mat.Mul4(mgl32.Translate3D(float32(block.X), float32(block.Y), float32(block.Z)))
+	blockMat = blockMat.Mul4(mgl32.Scale3D(1.0+wireEpsilon, 1.0+wireEpsilon, 1.0+wireEpsilon))
 
-	id := *block
-	show := [...]bool{
-		IsTransparent(game.world.Block(id.Left())),
-		IsTransparent(game.world.Block(id.Right())),
-		IsTransparent(game.world.Block(id.Up())),
-		IsTransparent(game.world.Block(id.Down())),
-		IsTransparent(game.world.Block(id.Front())),
-		IsTransparent(game.world.Block(id.Back())),
+	if *block != r.lastBlock {
+		var vertices []float32
+		vertices = makeFullWireFrameData(vertices)
+		if len(vertices) > 0 {
+			r.lastBlock = *block
+			if r.wireFrame != nil {
+				r.wireFrame.Release()
+			}
+			r.wireFrame = NewLines(r.shader, vertices)
+		}
 	}
-	vertices = makeWireFrameData(vertices, show)
-	if len(vertices) == 0 {
-		return
-	}
-	r.lastBlock = *block
 	if r.wireFrame != nil {
-		r.wireFrame.Release()
+		r.wireFrame.Draw(blockMat)
 	}
 
-	r.wireFrame = NewLines(r.shader, vertices)
-	r.wireFrame.Draw(mat)
+	if prev != nil && !game.world.HasBlock(*prev) {
+		prevID := *prev
+		if prevID != r.lastPrev {
+			var pv []float32
+			pv = makeFullWireFrameData(pv)
+			if len(pv) > 0 {
+				r.lastPrev = prevID
+				if r.placementFrame != nil {
+					r.placementFrame.Release()
+				}
+				r.placementFrame = NewLines(r.shader, pv)
+			}
+		}
+		if r.placementFrame != nil {
+			placeMat := mat.Mul4(mgl32.Translate3D(float32(prevID.X), float32(prevID.Y), float32(prevID.Z)))
+			placeMat = placeMat.Mul4(mgl32.Scale3D(1.0+wireEpsilon, 1.0+wireEpsilon, 1.0+wireEpsilon))
+			r.placementFrame.Draw(placeMat)
+		}
+	}
 }
 
 func (r *LineRender) Draw() {
 	width, height := game.win.GetSize()
-	projection := mgl32.Perspective(radian(45), float32(width)/float32(height), 0.01, ChunkWidth*float32(*renderRadius))
+	fov := game.camera.CurrentFOV()
+	if fov < 30 || fov > 120 {
+		fov = 65
+	}
+	projection := mgl32.Perspective(radian(fov), float32(width)/float32(height), 0.01, ChunkWidth*float32(*renderRadius))
 	camera := game.camera.Matrix()
 	mat := projection.Mul4(camera)
 

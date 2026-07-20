@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"math"
 	"sync"
 
 	"github.com/go-gl/mathgl/mgl32"
@@ -12,15 +13,123 @@ import (
 var importedWorld = flag.Bool("imported", false, "use imported world (skip procedural generation)")
 
 var (
-	skyColorDefault  = mgl32.Vec3{0.57, 0.71, 0.77}
-	skyColorImported = mgl32.Vec3{0.1, 0.1, 0.15}
+	skyColorDay     = mgl32.Vec3{0.57, 0.71, 0.77}
+	skyColorNight   = mgl32.Vec3{0.02, 0.02, 0.06}
+	skyColorSunrise = mgl32.Vec3{0.85, 0.45, 0.25}
 )
 
 func SkyColor() mgl32.Vec3 {
-	if *importedWorld {
-		return skyColorImported
+	if gameClock != nil {
+		return gameClock.SkyColor()
 	}
-	return skyColorDefault
+	return skyColorDay
+}
+
+type GameClock struct {
+	cycleLength float64
+	offset      float64
+}
+
+var gameClock *GameClock
+
+func NewGameClock(cycleLength float64) *GameClock {
+	return &GameClock{cycleLength: cycleLength}
+}
+
+func (c *GameClock) SetOffset(t float64) {
+	c.offset = t
+}
+
+func (c *GameClock) TimeOfDay(currentTime float64) float64 {
+	elapsed := currentTime - c.offset
+	t := elapsed / c.cycleLength
+	t = t - math.Floor(t)
+	return t
+}
+
+func (c *GameClock) SunDirection() mgl32.Vec3 {
+	angle := gameClock.sunAngle()
+	return mgl32.Vec3{
+		-float32(math.Cos(angle)),
+		float32(math.Sin(angle)),
+		-0.3,
+	}.Normalize()
+}
+
+func (c *GameClock) sunAngle() float64 {
+	var t float64
+	if game != nil && game.prevtime > 0 {
+		t = c.TimeOfDay(game.prevtime)
+	}
+	return (t - 0.25) * 2 * math.Pi
+}
+
+func (c *GameClock) SkyColor() mgl32.Vec3 {
+	var t float64
+	if game != nil && game.prevtime > 0 {
+		t = c.TimeOfDay(game.prevtime)
+	} else {
+		t = 0.5
+	}
+	return skyColorAtTime(t)
+}
+
+func (c *GameClock) AmbientLevel() float32 {
+	var t float64
+	if game != nil && game.prevtime > 0 {
+		t = c.TimeOfDay(game.prevtime)
+	} else {
+		t = 0.5
+	}
+	return ambientAtTime(t)
+}
+
+func skyColorAtTime(t float64) mgl32.Vec3 {
+	switch {
+	case t < 0.20:
+		return skyColorNight
+	case t < 0.30:
+		frac := float32((t - 0.20) / 0.10)
+		if frac < 0.5 {
+			return lerpVec3(skyColorNight, skyColorSunrise, frac*2)
+		}
+		return lerpVec3(skyColorSunrise, skyColorDay, (frac-0.5)*2)
+	case t < 0.70:
+		return skyColorDay
+	case t < 0.80:
+		frac := float32((t - 0.70) / 0.10)
+		if frac < 0.5 {
+			return lerpVec3(skyColorDay, skyColorSunrise, frac*2)
+		}
+		return lerpVec3(skyColorSunrise, skyColorNight, (frac-0.5)*2)
+	default:
+		return skyColorNight
+	}
+}
+
+func ambientAtTime(t float64) float32 {
+	switch {
+	case t < 0.20:
+		return 0.15
+	case t < 0.30:
+		frac := float32((t - 0.20) / 0.10)
+		return 0.15 + frac*0.35
+	case t < 0.70:
+		return 0.5
+	case t < 0.80:
+		frac := float32((t - 0.70) / 0.10)
+		return 0.5 - frac*0.35
+	default:
+		return 0.15
+	}
+}
+
+func lerpVec3(a, b mgl32.Vec3, t float32) mgl32.Vec3 {
+	return mgl32.Vec3{
+		a.X() + (b.X()-a.X())*t,
+		a.Y() + (b.Y()-a.Y())*t,
+		a.Z() + (b.Z()-a.Z())*t,
+	}
 }
 
 type BlockGetter interface {
@@ -112,6 +221,29 @@ func CollideStepped(bg BlockGetter, from, to mgl32.Vec3) (mgl32.Vec3, bool) {
 		}
 	}
 	return pos, stop
+}
+
+func CollideCrouch(bg BlockGetter, from, to mgl32.Vec3) (mgl32.Vec3, bool) {
+	fromFeetY := int(round(from.Y())) - 1
+	fromCenter := Vec3{int(round(from.X())), fromFeetY, int(round(from.Z()))}
+	onGround := IsObstacle(bg.GetBlock(fromCenter))
+	if !onGround {
+		return CollideStepped(bg, from, to)
+	}
+	result, stopped := CollideStepped(bg, from, to)
+	feetY := int(round(result.Y())) - 1
+	offsets := [][2]float64{{0.25, 0}, {-0.25, 0}, {0, 0.25}, {0, -0.25}}
+	for _, off := range offsets {
+		checkPos := Vec3{
+			int(math.Floor(float64(result.X()) + off[0])),
+			feetY,
+			int(math.Floor(float64(result.Z()) + off[1])),
+		}
+		if bg.GetBlock(checkPos) == 0 {
+			return mgl32.Vec3{from.X(), result.Y(), from.Z()}, stopped
+		}
+	}
+	return result, stopped
 }
 
 func (w *World) Collide(pos mgl32.Vec3) (mgl32.Vec3, bool) {
@@ -328,5 +460,6 @@ func makeChunkMap(cid Vec3) map[Vec3]int {
 			}
 		}
 	}
+	applyCastleToChunk(cid, m)
 	return m
 }

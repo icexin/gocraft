@@ -193,6 +193,27 @@ func makeWireFrameData(vertices []float32, show [6]bool) []float32 {
 	return vertices
 }
 
+func makeFullWireFrameData(vertices []float32) []float32 {
+	const h = 0.5
+	vertices = append(vertices, []float32{
+		-h, -h, -h, h, -h, -h,
+		h, -h, -h, h, -h, h,
+		h, -h, h, -h, -h, h,
+		-h, -h, h, -h, -h, -h,
+
+		-h, h, -h, h, h, -h,
+		h, h, -h, h, h, h,
+		h, h, h, -h, h, h,
+		-h, h, h, -h, h, -h,
+
+		-h, -h, -h, -h, h, -h,
+		h, -h, -h, h, h, -h,
+		h, -h, h, h, h, h,
+		-h, -h, h, -h, h, h,
+	}...)
+	return vertices
+}
+
 func makePlantData(vertices []float32, show [6]bool, block Vec3, tex *BlockTexture) []float32 {
 	l, r := tex.Left, tex.Right
 	f, b := tex.Front, tex.Back
