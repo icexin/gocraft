@@ -11,6 +11,14 @@ const (
 	MoveRight
 )
 
+type MovementMode int
+
+const (
+	ModeWalk MovementMode = iota
+	ModeSprint
+	ModeCrouch
+)
+
 type Camera struct {
 	pos    mgl32.Vec3
 	up     mgl32.Vec3
@@ -22,17 +30,21 @@ type Camera struct {
 
 	Sens float32
 
-	flying bool
+	flying       bool
+	movementMode MovementMode
+	currentFOV   float32
+	crouchOffset float32
 }
 
 func NewCamera(pos mgl32.Vec3) *Camera {
 	c := &Camera{
-		pos:     pos,
-		front:   mgl32.Vec3{0, 0, -1},
-		rotatey: 0,
-		rotatex: -90,
-		Sens:    0.14,
-		flying:  false,
+		pos:        pos,
+		front:      mgl32.Vec3{0, 0, -1},
+		rotatey:    0,
+		rotatex:    -90,
+		Sens:       0.14,
+		flying:     false,
+		currentFOV: 65,
 	}
 	c.updateAngles()
 	return c
@@ -94,10 +106,53 @@ func (c *Camera) OnAngleChange(dx, dy float32) {
 	c.updateAngles()
 }
 
-func (c *Camera) OnMoveChange(dir CameraMovement, delta float32) {
+func (c *Camera) SpeedMultiplier() float32 {
+	base := float32(1.0)
 	if c.flying {
-		delta = 5 * delta
+		base = 5.0
 	}
+	switch c.movementMode {
+	case ModeSprint:
+		return base * 1.6
+	case ModeCrouch:
+		return base * 0.5
+	default:
+		return base
+	}
+}
+
+func (c *Camera) SetMovementMode(mode MovementMode) {
+	c.movementMode = mode
+}
+
+func (c *Camera) GetMovementMode() MovementMode {
+	return c.movementMode
+}
+
+func (c *Camera) CurrentFOV() float32 {
+	return c.currentFOV
+}
+
+func (c *Camera) CrouchOffset() float32 {
+	return c.crouchOffset
+}
+
+func (c *Camera) UpdateFOV(dt float32) {
+	targetFOV := float32(65.0)
+	if c.movementMode == ModeSprint {
+		targetFOV = 75.0
+	}
+	c.currentFOV = c.currentFOV + (targetFOV-c.currentFOV)*min(1.0, dt*10.0)
+
+	targetCrouch := float32(0.0)
+	if c.movementMode == ModeCrouch {
+		targetCrouch = -0.3
+	}
+	c.crouchOffset = c.crouchOffset + (targetCrouch-c.crouchOffset)*min(1.0, dt*10.0)
+}
+
+func (c *Camera) OnMoveChange(dir CameraMovement, delta float32) {
+	delta = delta * c.SpeedMultiplier()
 	switch dir {
 	case MoveForward:
 		if c.flying {
